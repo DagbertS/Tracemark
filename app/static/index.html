@@ -438,15 +438,99 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 }
 .model-info-badge:hover .model-info-tooltip { display: block; }
 
+/* ── ADMIN ── */
+.admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.admin-stat { background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-subtle); padding: 20px; text-align: center; }
+.admin-stat-num { font-size: 32px; font-weight: 700; color: var(--teal-primary); }
+.admin-stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.admin-stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.company-card { padding: 20px; cursor: pointer; transition: border-color 200ms; }
+.company-card:hover { border-left-color: var(--amber-accent); }
+.company-card.selected { border-left-color: var(--amber-accent); background: var(--bg-card-hover); }
+.company-status { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.company-status.active { background: var(--teal-primary); }
+.company-status.suspended { background: var(--red-violation); }
+.company-plan-badge { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.04em; }
+.plan-enterprise { background: rgba(245,166,35,0.2); color: var(--amber-accent); border: 1px solid var(--amber-accent); }
+.plan-business { background: rgba(0,198,184,0.15); color: var(--teal-primary); border: 1px solid var(--teal-primary); }
+.plan-starter { background: rgba(140,160,179,0.15); color: var(--text-muted); border: 1px solid var(--text-muted); }
+.admin-detail-panel { background: var(--bg-mid-navy); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 20px; }
+.admin-tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); }
+.admin-tab { padding: 10px 20px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 150ms; }
+.admin-tab:hover { color: var(--text-primary); }
+.admin-tab.active { color: var(--teal-primary); border-bottom-color: var(--teal-primary); }
+.user-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); transition: background 150ms; }
+.user-row:hover { background: var(--bg-card-hover); }
+.user-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--teal-dark); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; flex-shrink: 0; }
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 13px; font-weight: 600; }
+.user-email { font-size: 11px; color: var(--text-muted); }
+.user-role-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; }
+.role-admin { background: rgba(245,166,35,0.2); color: var(--amber-accent); }
+.role-operator { background: rgba(0,198,184,0.15); color: var(--teal-primary); }
+.role-viewer { background: rgba(140,160,179,0.15); color: var(--text-muted); }
+.user-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.user-actions button { font-size: 10px; padding: 4px 8px; border-radius: 3px; border: 1px solid var(--border-subtle); background: var(--bg-card); color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.user-actions button:hover { border-color: var(--teal-primary); color: var(--teal-primary); }
+.user-actions button.danger-btn:hover { border-color: var(--red-violation); color: var(--red-violation); }
+.audit-row { padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; display: flex; gap: 12px; align-items: center; }
+.audit-row:nth-child(odd) { background: var(--bg-card); }
+.audit-action-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px; white-space: nowrap; }
+.audit-action-badge.login { background: rgba(0,198,184,0.15); color: var(--teal-primary); }
+.audit-action-badge.created { background: rgba(245,166,35,0.15); color: var(--amber-accent); }
+.audit-action-badge.deleted, .audit-action-badge.suspended { background: rgba(229,62,62,0.15); color: var(--red-violation); }
+.audit-action-badge.updated, .audit-action-badge.password_reset { background: rgba(100,149,237,0.2); color: #6495ed; }
+.consumption-bar { height: 8px; border-radius: 4px; background: var(--bg-card); overflow: hidden; margin-top: 4px; }
+.consumption-fill { height: 100%; border-radius: 4px; transition: width 300ms ease; }
+.soc-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(0,198,184,0.1); border: 1px solid var(--teal-primary); color: var(--teal-primary); }
+
+/* Hamburger for mobile */
+.hamburger { display: none; background: none; border: none; color: var(--text-primary); font-size: 24px; cursor: pointer; padding: 4px 8px; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 960px) {
   .sidebar { width: 50px; }
   .nav-item span, .sidebar-section-title, .policy-mini-card { display: none; }
   .nav-item { justify-content: center; padding: 0; }
+  .admin-grid { grid-template-columns: repeat(2, 1fr); }
+  .user-actions { flex-wrap: wrap; }
 }
-@media (max-width: 640px) {
-  .stats-bar { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 768px) {
+  .hamburger { display: block; }
+  .sidebar {
+    position: fixed; left: -260px; top: 56px; bottom: 0; width: 240px;
+    z-index: 150; transition: left 200ms ease; box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+  }
+  .sidebar.open { left: 0; }
+  .sidebar .nav-item span, .sidebar .sidebar-section-title, .sidebar .policy-mini-card { display: block; }
+  .sidebar .nav-item { justify-content: flex-start; padding: 0 20px; }
+  .header { padding: 0 12px; }
+  .header-center { font-size: 12px; }
+  .main-content { padding: 12px; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-number { font-size: 20px; }
+  .stat-tile { padding: 10px 12px; }
   .rem-panels { grid-template-columns: 1fr; }
+  .policy-grid { grid-template-columns: 1fr; }
+  .table-container { font-size: 11px; }
+  .table-container th, .table-container td { padding: 6px 8px; }
+  .modal { padding: 16px; width: 95%; }
+  .admin-grid { grid-template-columns: 1fr 1fr; }
+  .admin-detail-panel { padding: 12px; }
+  .admin-tabs { overflow-x: auto; }
+  .admin-tab { padding: 8px 12px; font-size: 11px; white-space: nowrap; }
+  .user-row { flex-wrap: wrap; gap: 8px; }
+  .user-actions { width: 100%; justify-content: flex-end; }
+  .feed-top { gap: 6px; }
+  .feed-card { padding-left: 10px !important; }
+  #adminSplitLayout { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 480px) {
+  .stats-bar { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .stat-number { font-size: 18px; }
+  .brand { font-size: 16px; }
+  .admin-grid { grid-template-columns: 1fr; }
+  .header-center { display: none; }
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -490,6 +574,7 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 <!-- HEADER -->
 <header class="header">
   <div class="header-left">
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">☰</button>
     <div class="shield-icon">
       <svg viewBox="0 0 24 24" fill="none"><path d="M12 2L4 6v6c0 5.25 3.5 10.15 8 11.35C16.5 22.15 20 17.25 20 12V6L12 2z" fill="currentColor"/></svg>
     </div>
@@ -515,6 +600,7 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       <div class="nav-item" data-tab="policies" onclick="switchTab('policies')"><span>Policies</span></div>
       <div class="nav-item" data-tab="remediation" onclick="switchTab('remediation')"><span>Remediation</span></div>
       <div class="nav-item" data-tab="chain" onclick="switchTab('chain')"><span>Chain Integrity</span></div>
+      <div class="nav-item" data-tab="admin" onclick="switchTab('admin')"><span>⚙ Admin</span></div>
     </div>
     <div class="sidebar-section-title">Active Policies</div>
     <div id="sidebarPolicies"></div>
@@ -666,6 +752,31 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       </div>
     </div>
 
+    <!-- ADMIN TAB -->
+    <div id="tab-admin" class="tab-content hidden">
+      <!-- Dashboard Stats -->
+      <div class="admin-grid" id="adminDashGrid"></div>
+
+      <!-- Company list + detail split -->
+      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px" id="adminSplitLayout">
+        <!-- Left: company list -->
+        <div>
+          <div class="section-title-row">
+            <div class="section-title" style="margin-bottom:0">Companies</div>
+            <button class="btn-primary" onclick="openCreateCompany()" style="font-size:11px;padding:6px 12px">+ New</button>
+          </div>
+          <div id="companyList"></div>
+        </div>
+        <!-- Right: detail panel -->
+        <div class="admin-detail-panel" id="adminDetailPanel">
+          <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+            <div style="font-size:36px;margin-bottom:12px">🏢</div>
+            <div style="font-size:14px">Select a company to manage</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -780,6 +891,48 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
   </div>
 </div>
 
+<!-- CREATE COMPANY MODAL -->
+<div class="modal-overlay" id="createCompanyModal">
+  <div class="modal modal-left" style="max-width:550px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div class="section-title" style="margin-bottom:0">Create Company</div>
+      <button style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer" onclick="closeCreateCompany()">&times;</button>
+    </div>
+    <div class="form-group"><label class="form-label">Company Name</label><input class="form-input" id="newCompName" placeholder="e.g. Acme Corp"></div>
+    <div class="form-group"><label class="form-label">Slug</label><input class="form-input" id="newCompSlug" placeholder="e.g. acme"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label class="form-label">Plan</label><select class="form-select" id="newCompPlan"><option value="starter">Starter</option><option value="business">Business</option><option value="enterprise">Enterprise</option></select></div>
+      <div class="form-group"><label class="form-label">SOC Level</label><select class="form-select" id="newCompSOC"><option value="SOC2-Type-I">SOC2 Type I</option><option value="SOC2-Type-II">SOC2 Type II</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" id="newCompEmail" placeholder="admin@company.com"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="form-group"><label class="form-label">Max Users</label><input class="form-input" id="newCompMaxUsers" type="number" value="50"></div>
+      <div class="form-group"><label class="form-label">Data Retention (days)</label><input class="form-input" id="newCompRetention" type="number" value="90"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn-secondary" onclick="closeCreateCompany()">Cancel</button>
+      <button class="btn-primary" onclick="submitNewCompany()">Create Company</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE USER MODAL -->
+<div class="modal-overlay" id="createUserModal">
+  <div class="modal modal-left" style="max-width:450px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div class="section-title" style="margin-bottom:0">Create User</div>
+      <button style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer" onclick="closeCreateUser()">&times;</button>
+    </div>
+    <div class="form-group"><label class="form-label">Display Name</label><input class="form-input" id="newUserName" placeholder="Jane Smith"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="newUserEmail" placeholder="jane@company.com" type="email"></div>
+    <div class="form-group"><label class="form-label">Role</label><select class="form-select" id="newUserRole"><option value="viewer">Viewer</option><option value="operator">Operator</option><option value="admin">Admin</option></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn-secondary" onclick="closeCreateUser()">Cancel</button>
+      <button class="btn-primary" onclick="submitNewUser()">Create User</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 <script>
 const API = '';
@@ -795,10 +948,17 @@ function switchTab(tab) {
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
-  const titles = { feed: 'Live Feed', provenance: 'Provenance Log', policies: 'Policy Enforcement', remediation: 'Remediation', chain: 'Chain Integrity' };
+  const titles = { feed: 'Live Feed', provenance: 'Provenance Log', policies: 'Policy Enforcement', remediation: 'Remediation', chain: 'Chain Integrity', admin: 'Admin Console' };
   document.getElementById('pageTitle').textContent = titles[tab] || tab;
+  // Close mobile sidebar on tab switch
+  document.querySelector('.sidebar').classList.remove('open');
   if (tab === 'chain') verifyChainFull();
   if (tab === 'policies') loadPendingPolicies();
+  if (tab === 'admin') loadAdmin();
+}
+
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
 }
 
 function badgeClass(verdict) {
@@ -1615,6 +1775,277 @@ function editAutoRemediation(idx) {
   document.getElementById('autoGenModal').classList.remove('open');
   // Open in WYSIWYG editor — save to first registry action
   openWysiwygEditor('/api/remediation/registry/EMAIL_SENT/text', g.remediation_html, 'Edit Auto-Remediation: ' + g.policy_name);
+}
+
+// ── ADMIN ──
+let selectedCompanyId = null;
+
+async function loadAdmin() {
+  try {
+    const [dash, companies] = await Promise.all([
+      fetch(API + '/api/admin/dashboard').then(r => r.json()),
+      fetch(API + '/api/admin/companies').then(r => r.json()),
+    ]);
+    renderAdminDash(dash);
+    renderCompanyList(companies);
+    if (selectedCompanyId) loadCompanyDetail(selectedCompanyId);
+  } catch (err) { console.error('Admin load error:', err); }
+}
+
+function renderAdminDash(d) {
+  document.getElementById('adminDashGrid').innerHTML =
+    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_companies + '</div><div class="admin-stat-label">Companies</div><div class="admin-stat-sub">' + d.active_companies + ' active</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_users + '</div><div class="admin-stat-label">Total Users</div><div class="admin-stat-sub">' + d.active_users + ' active · ' + d.suspended_users + ' suspended</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_requests.toLocaleString() + '</div><div class="admin-stat-label">Total Requests</div><div class="admin-stat-sub">' + d.total_tokens.toLocaleString() + ' tokens</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">$' + d.total_cost.toFixed(2) + '</div><div class="admin-stat-label">Total Cost</div><div class="admin-stat-sub">' + d.audit_entries + ' audit events</div></div>';
+}
+
+function renderCompanyList(companies) {
+  document.getElementById('companyList').innerHTML = companies.map(c =>
+    '<div class="card company-card' + (c.id === selectedCompanyId ? ' selected' : '') + '" onclick="selectCompany(\'' + c.id + '\')">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center">' +
+    '<div><span class="company-status ' + c.status + '"></span><span style="font-weight:600">' + escHtml(c.name) + '</span></div>' +
+    '<span class="company-plan-badge plan-' + c.plan + '">' + c.plan + '</span></div>' +
+    '<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">' +
+    c.user_count + ' users · ' + c.total_requests.toLocaleString() + ' requests · $' + (c.total_cost || 0).toFixed(2) +
+    '</div><div style="margin-top:4px"><span class="soc-badge">' + escHtml(c.soc_compliance_level || 'SOC2-Type-I') + '</span></div></div>'
+  ).join('');
+}
+
+function selectCompany(id) {
+  selectedCompanyId = id;
+  document.querySelectorAll('.company-card').forEach(c => {
+    c.classList.remove('selected');
+    if (c.getAttribute('onclick') && c.getAttribute('onclick').includes(id)) c.classList.add('selected');
+  });
+  loadCompanyDetail(id);
+}
+
+async function loadCompanyDetail(companyId) {
+  const [company, users, audit] = await Promise.all([
+    fetch(API + '/api/admin/companies/' + companyId).then(r => r.json()),
+    fetch(API + '/api/admin/companies/' + companyId + '/users').then(r => r.json()),
+    fetch(API + '/api/admin/audit-log?company_id=' + companyId + '&limit=50').then(r => r.json()),
+  ]);
+  renderCompanyDetail(company, users, audit);
+}
+
+let adminActiveTab = 'users';
+
+function switchAdminTab(tab) {
+  adminActiveTab = tab;
+  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.admin-tab[data-tab="' + tab + '"]').classList.add('active');
+  document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById('adminTab-' + tab).classList.remove('hidden');
+}
+
+function renderCompanyDetail(company, users, audit) {
+  const panel = document.getElementById('adminDetailPanel');
+  const usagePct = company.max_requests_per_month > 0 ? Math.min(100, Math.round((company.total_requests || 0) / company.max_requests_per_month * 100)) : 0;
+  const usageColor = usagePct > 80 ? 'var(--red-violation)' : usagePct > 50 ? 'var(--amber-accent)' : 'var(--teal-primary)';
+  const userPct = company.max_users > 0 ? Math.min(100, Math.round((company.user_count || users.length) / company.max_users * 100)) : 0;
+
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+    '<div><span class="company-status ' + company.status + '"></span><span style="font-size:18px;font-weight:700">' + escHtml(company.name) + '</span>' +
+    ' <span class="company-plan-badge plan-' + company.plan + '">' + company.plan + '</span>' +
+    ' <span class="soc-badge">' + escHtml(company.soc_compliance_level) + '</span></div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+    (company.status === 'active' ?
+      '<button class="btn-danger" onclick="suspendCompany(\'' + company.id + '\')">Suspend</button>' :
+      '<button class="btn-approve" onclick="activateCompany(\'' + company.id + '\')">Activate</button>') +
+    '<button class="btn-secondary" style="font-size:11px;padding:6px 10px" onclick="deleteCompany(\'' + company.id + '\')">Delete</button></div></div>' +
+
+    // Info row
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Contact</div><div style="font-size:12px">' + escHtml(company.contact_email || '-') + '</div><div style="font-size:11px;color:var(--text-muted)">' + escHtml(company.contact_phone || '') + '</div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Request Usage</div><div style="font-size:16px;font-weight:700;color:' + usageColor + '">' + usagePct + '%</div><div class="consumption-bar"><div class="consumption-fill" style="width:' + usagePct + '%;background:' + usageColor + '"></div></div><div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + (company.total_requests||0).toLocaleString() + ' / ' + company.max_requests_per_month.toLocaleString() + '</div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Users</div><div style="font-size:16px;font-weight:700;color:var(--teal-primary)">' + users.length + ' / ' + company.max_users + '</div><div class="consumption-bar"><div class="consumption-fill" style="width:' + userPct + '%;background:var(--teal-primary)"></div></div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Settings</div><div style="font-size:11px">MFA: ' + (company.mfa_required ? '<span style="color:var(--teal-primary)">Required</span>' : '<span style="color:var(--text-muted)">Off</span>') + '</div><div style="font-size:11px">Retention: ' + company.data_retention_days + ' days</div></div></div>' +
+
+    // Tabs
+    '<div class="admin-tabs">' +
+    '<div class="admin-tab' + (adminActiveTab==='users'?' active':'') + '" data-tab="users" onclick="switchAdminTab(\'users\')">Users (' + users.length + ')</div>' +
+    '<div class="admin-tab' + (adminActiveTab==='audit'?' active':'') + '" data-tab="audit" onclick="switchAdminTab(\'audit\')">Audit Log (' + audit.length + ')</div>' +
+    '<div class="admin-tab' + (adminActiveTab==='settings'?' active':'') + '" data-tab="settings" onclick="switchAdminTab(\'settings\')">Settings</div></div>' +
+
+    // Users tab
+    '<div id="adminTab-users" class="admin-tab-content' + (adminActiveTab!=='users'?' hidden':'') + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+    '<input class="prov-search" placeholder="Search users..." oninput="filterAdminUsers(this.value)" style="max-width:250px;font-size:12px">' +
+    '<button class="btn-primary" style="font-size:11px;padding:6px 12px" onclick="openCreateUser(\'' + company.id + '\')">+ Add User</button></div>' +
+    '<div id="adminUserList">' + renderUserRows(users) + '</div></div>' +
+
+    // Audit tab
+    '<div id="adminTab-audit" class="admin-tab-content' + (adminActiveTab!=='audit'?' hidden':'') + '">' +
+    renderAuditRows(audit) + '</div>' +
+
+    // Settings tab
+    '<div id="adminTab-settings" class="admin-tab-content' + (adminActiveTab!=='settings'?' hidden':'') + '">' +
+    renderCompanySettings(company) + '</div>';
+}
+
+function renderUserRows(users) {
+  if (!users.length) return '<div style="text-align:center;padding:20px;color:var(--text-muted)">No users</div>';
+  return users.map(u => {
+    const initials = (u.display_name || 'U').split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+    const statusDot = u.status === 'active' ? 'company-status active' : 'company-status suspended';
+    return '<div class="user-row" data-search="' + escHtml((u.display_name + ' ' + u.email + ' ' + u.role).toLowerCase()) + '">' +
+      '<div class="user-avatar">' + initials + '</div>' +
+      '<div class="user-info"><div class="user-name"><span class="' + statusDot + '"></span>' + escHtml(u.display_name) + '</div>' +
+      '<div class="user-email">' + escHtml(u.email) + '</div></div>' +
+      '<span class="user-role-badge role-' + u.role + '">' + u.role + '</span>' +
+      '<div style="font-size:10px;color:var(--text-muted);text-align:right;min-width:60px">' + (u.login_count || 0) + ' logins' +
+      (u.failed_login_count > 0 ? '<br><span style="color:var(--red-violation)">' + u.failed_login_count + ' failed</span>' : '') + '</div>' +
+      '<div class="user-actions">' +
+      (u.status === 'active' ?
+        '<button onclick="adminSuspendUser(\'' + u.id + '\');event.stopPropagation()">Suspend</button>' :
+        '<button onclick="adminActivateUser(\'' + u.id + '\');event.stopPropagation()">Activate</button>') +
+      '<button onclick="adminResetPassword(\'' + u.id + '\');event.stopPropagation()">Reset PW</button>' +
+      '<button class="danger-btn" onclick="adminDeleteUser(\'' + u.id + '\');event.stopPropagation()">Delete</button></div></div>';
+  }).join('');
+}
+
+function filterAdminUsers(q) {
+  const term = q.toLowerCase();
+  document.querySelectorAll('#adminUserList .user-row').forEach(row => {
+    const search = row.getAttribute('data-search') || '';
+    row.style.display = search.includes(term) ? '' : 'none';
+  });
+}
+
+function auditActionClass(action) {
+  if (action.includes('login')) return 'login';
+  if (action.includes('created')) return 'created';
+  if (action.includes('deleted') || action.includes('suspended')) return 'suspended';
+  if (action.includes('updated') || action.includes('password') || action.includes('reset')) return 'updated';
+  return '';
+}
+
+function renderAuditRows(entries) {
+  if (!entries.length) return '<div style="text-align:center;padding:20px;color:var(--text-muted)">No audit entries</div>';
+  return entries.map(e =>
+    '<div class="audit-row">' +
+    '<span style="color:var(--text-muted);font-size:10px;min-width:140px">' + fmtDate(e.timestamp) + '</span>' +
+    '<span class="audit-action-badge ' + auditActionClass(e.action) + '">' + escHtml(e.action) + '</span>' +
+    '<span style="flex:1;color:var(--text-muted)">' + escHtml(e.actor_email || 'system') +
+    (e.target_id ? ' → ' + escHtml(e.target_id) : '') + '</span>' +
+    (e.ip_address ? '<span style="font-size:10px;color:var(--text-muted);font-family:monospace">' + escHtml(e.ip_address) + '</span>' : '') +
+    '</div>'
+  ).join('');
+}
+
+function renderCompanySettings(c) {
+  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+    '<div class="form-group"><label class="form-label">Company Name</label><input class="form-input" id="editCompName" value="' + escHtml(c.name) + '"></div>' +
+    '<div class="form-group"><label class="form-label">Plan</label><select class="form-select" id="editCompPlan"><option value="starter"' + (c.plan==='starter'?' selected':'') + '>Starter</option><option value="business"' + (c.plan==='business'?' selected':'') + '>Business</option><option value="enterprise"' + (c.plan==='enterprise'?' selected':'') + '>Enterprise</option></select></div>' +
+    '<div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" id="editCompEmail" value="' + escHtml(c.contact_email || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Contact Phone</label><input class="form-input" id="editCompPhone" value="' + escHtml(c.contact_phone || '') + '"></div>' +
+    '<div class="form-group"><label class="form-label">Max Users</label><input class="form-input" id="editCompMaxUsers" type="number" value="' + (c.max_users || 50) + '"></div>' +
+    '<div class="form-group"><label class="form-label">Max Requests/Month</label><input class="form-input" id="editCompMaxReq" type="number" value="' + (c.max_requests_per_month || 100000) + '"></div>' +
+    '<div class="form-group"><label class="form-label">SOC Compliance Level</label><select class="form-select" id="editCompSOC"><option value="SOC2-Type-I"' + (c.soc_compliance_level==='SOC2-Type-I'?' selected':'') + '>SOC2 Type I</option><option value="SOC2-Type-II"' + (c.soc_compliance_level==='SOC2-Type-II'?' selected':'') + '>SOC2 Type II</option></select></div>' +
+    '<div class="form-group"><label class="form-label">Data Retention (days)</label><input class="form-input" id="editCompRetention" type="number" value="' + (c.data_retention_days || 90) + '"></div>' +
+    '<div class="form-group"><label class="form-label">MFA Required</label><select class="form-select" id="editCompMFA"><option value="0"' + (!c.mfa_required?' selected':'') + '>No</option><option value="1"' + (c.mfa_required?' selected':'') + '>Yes</option></select></div>' +
+    '</div>' +
+    '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">' +
+    '<button class="btn-primary" onclick="saveCompanySettings(\'' + c.id + '\')">Save Settings</button></div>';
+}
+
+async function saveCompanySettings(id) {
+  const body = {
+    name: document.getElementById('editCompName').value,
+    plan: document.getElementById('editCompPlan').value,
+    contact_email: document.getElementById('editCompEmail').value,
+    contact_phone: document.getElementById('editCompPhone').value,
+    max_users: parseInt(document.getElementById('editCompMaxUsers').value),
+    max_requests_per_month: parseInt(document.getElementById('editCompMaxReq').value),
+    soc_compliance_level: document.getElementById('editCompSOC').value,
+    data_retention_days: parseInt(document.getElementById('editCompRetention').value),
+    mfa_required: document.getElementById('editCompMFA').value === '1',
+  };
+  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  loadAdmin();
+}
+
+async function suspendCompany(id) {
+  if (!confirm('Suspend this company?')) return;
+  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: 'suspended'}) });
+  loadAdmin();
+}
+
+async function activateCompany(id) {
+  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: 'active'}) });
+  loadAdmin();
+}
+
+async function deleteCompany(id) {
+  if (!confirm('Delete this company and all its users? This cannot be undone.')) return;
+  await fetch(API + '/api/admin/companies/' + id, { method: 'DELETE' });
+  selectedCompanyId = null;
+  loadAdmin();
+}
+
+function openCreateCompany() { document.getElementById('createCompanyModal').classList.add('open'); }
+function closeCreateCompany() { document.getElementById('createCompanyModal').classList.remove('open'); }
+
+async function submitNewCompany() {
+  const name = document.getElementById('newCompName').value.trim();
+  const slug = document.getElementById('newCompSlug').value.trim();
+  if (!name || !slug) { alert('Name and slug are required'); return; }
+  await fetch(API + '/api/admin/companies', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name, slug,
+      plan: document.getElementById('newCompPlan').value,
+      soc_compliance_level: document.getElementById('newCompSOC').value,
+      contact_email: document.getElementById('newCompEmail').value,
+      max_users: parseInt(document.getElementById('newCompMaxUsers').value) || 50,
+      data_retention_days: parseInt(document.getElementById('newCompRetention').value) || 90,
+    }),
+  });
+  closeCreateCompany();
+  loadAdmin();
+}
+
+let createUserCompanyId = '';
+function openCreateUser(companyId) { createUserCompanyId = companyId; document.getElementById('createUserModal').classList.add('open'); }
+function closeCreateUser() { document.getElementById('createUserModal').classList.remove('open'); }
+
+async function submitNewUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  if (!name || !email) { alert('Name and email are required'); return; }
+  await fetch(API + '/api/admin/companies/' + createUserCompanyId + '/users', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ display_name: name, email, role: document.getElementById('newUserRole').value, company_id: createUserCompanyId }),
+  });
+  closeCreateUser();
+  loadCompanyDetail(selectedCompanyId);
+}
+
+async function adminSuspendUser(id) {
+  if (!confirm('Suspend this user?')) return;
+  await fetch(API + '/api/admin/users/' + id + '/suspend', { method: 'POST' });
+  loadCompanyDetail(selectedCompanyId);
+}
+
+async function adminActivateUser(id) {
+  await fetch(API + '/api/admin/users/' + id + '/activate', { method: 'POST' });
+  loadCompanyDetail(selectedCompanyId);
+}
+
+async function adminResetPassword(id) {
+  if (!confirm('Reset this user\'s password?')) return;
+  await fetch(API + '/api/admin/users/' + id + '/reset-password', { method: 'POST' });
+  alert('Password reset successfully. A temporary password has been generated.');
+  loadCompanyDetail(selectedCompanyId);
+}
+
+async function adminDeleteUser(id) {
+  if (!confirm('Delete this user permanently?')) return;
+  await fetch(API + '/api/admin/users/' + id, { method: 'DELETE' });
+  loadCompanyDetail(selectedCompanyId);
 }
 
 // ── UPDATE TIMER ──

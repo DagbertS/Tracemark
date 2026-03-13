@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from . import proxy
-from .api import health, provenance as provenance_api, policies as policies_api, remediation as remediation_api
+from .api import health, provenance as provenance_api, policies as policies_api, remediation as remediation_api, admin as admin_api
 from .policy_engine import PolicyEngine
 from .provenance import ProvenanceStore
 from .remediation import SAGAOrchestrator, ActionRegistry
@@ -101,6 +101,9 @@ async def lifespan(app: FastAPI):
     remediation_api.action_registry = ar
     remediation_api.provenance_store = ps
 
+    # Initialize admin multi-tenant DB
+    await admin_api.initialize_admin_db(db_path)
+
     logger.info("Tracemark infrastructure initialized")
     logger.info(f"  Policies loaded: {len(pe.policies)}")
     logger.info(f"  Mock mode: {proxy.upstream_config['mock_mode']}")
@@ -124,6 +127,7 @@ app.include_router(health.router)
 app.include_router(provenance_api.router)
 app.include_router(policies_api.router)
 app.include_router(remediation_api.router)
+app.include_router(admin_api.router)
 
 # Serve static UI
 static_dir = Path(__file__).parent / "static"

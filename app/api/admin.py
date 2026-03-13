@@ -1,0 +1,562 @@
+"""Admin API — Multi-tenant company & user management with SOC compliance.
+
+Provides CRUD for companies (tenants), users within companies, consumption
+tracking, audit logging, and administrative actions (suspend, password reset).
+All mutations are logged to the SOC audit trail.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Optional, List
+
+import aiosqlite
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
+
+logger = logging.getLogger("tracemark.admin")
+
+router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Module-level reference — wired up in main.py lifespan
+db_path: str = "tracemark_provenance.db"
+
+# ──────────────────────────────────────────────
+# Schema
+# ──────────────────────────────────────────────
+
+ADMIN_SCHEMA = """
+CREATE TABLE IF NOT EXISTS companies (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    plan TEXT DEFAULT 'starter',
+    status TEXT DEFAULT 'active',
+    contact_email TEXT DEFAULT '',
+    contact_phone TEXT DEFAULT '',
+    address TEXT DEFAULT '',
+    max_users INTEGER DEFAULT 50,
+    max_requests_per_month INTEGER DEFAULT 100000,
+    soc_compliance_level TEXT DEFAULT 'SOC2-Type-I',
+    data_retention_days INTEGER DEFAULT 90,
+    mfa_required INTEGER DEFAULT 0,
+    ip_whitelist TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    role TEXT DEFAULT 'viewer',
+    status TEXT DEFAULT 'active',
+    password_hash TEXT DEFAULT '',
+    last_login TEXT,
+    login_count INTEGER DEFAULT 0,
+    failed_login_count INTEGER DEFAULT 0,
+    locked_until TEXT,
+    mfa_enabled INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+CREATE INDEX IF NOT EXISTS idx_users_company ON users(company_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    actor_id TEXT,
+    actor_email TEXT,
+    company_id TEXT,
+    action TEXT NOT NULL,
+    target_type TEXT,
+    target_id TEXT,
+    details TEXT DEFAULT '{}',
+    ip_address TEXT DEFAULT '',
+    user_agent TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_company ON audit_log(company_id);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    ip_address TEXT DEFAULT '',
+    user_agent TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked INTEGER DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+"""
+
+ADMIN_MIGRATIONS = [
+    "ALTER TABLE companies ADD COLUMN contact_phone TEXT DEFAULT ''",
+    "ALTER TABLE companies ADD COLUMN address TEXT DEFAULT ''",
+    "ALTER TABLE companies ADD COLUMN max_requests_per_month INTEGER DEFAULT 100000",
+    "ALTER TABLE companies ADD COLUMN soc_compliance_level TEXT DEFAULT 'SOC2-Type-I'",
+    "ALTER TABLE companies ADD COLUMN data_retention_days INTEGER DEFAULT 90",
+    "ALTER TABLE companies ADD COLUMN mfa_required INTEGER DEFAULT 0",
+    "ALTER TABLE companies ADD COLUMN ip_whitelist TEXT DEFAULT '[]'",
+    "ALTER TABLE users ADD COLUMN locked_until TEXT",
+    "ALTER TABLE users ADD COLUMN mfa_enabled INTEGER DEFAULT 0",
+]
+
+
+async def initialize_admin_db(path: str):
+    """Create admin tables and run migrations."""
+    global db_path
+    db_path = path
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.executescript(ADMIN_SCHEMA)
+        await conn.commit()
+        for mig in ADMIN_MIGRATIONS:
+            try:
+                await conn.execute(mig)
+                await conn.commit()
+            except Exception:
+                pass
+
+    # Seed demo data if companies table is empty
+    async with aiosqlite.connect(db_path) as conn:
+        cur = await conn.execute("SELECT COUNT(*) FROM companies")
+        count = (await cur.fetchone())[0]
+        if count == 0:
+            await _seed_demo_data(conn)
+            await conn.commit()
+    logger.info("Admin DB initialized")
+
+
+async def _seed_demo_data(conn: aiosqlite.Connection):
+    """Insert demo companies + users for first run."""
+    now = datetime.now(timezone.utc).isoformat()
+    companies = [
+        ("comp-acme", "Acme Corp", "acme", "enterprise", "active", "admin@acme.io", "+1-555-0100", "123 Innovation Way, SF", 100, 500000, "SOC2-Type-II", 365, 1),
+        ("comp-globex", "Globex Industries", "globex", "business", "active", "ops@globex.com", "+1-555-0200", "456 Tech Park, NYC", 50, 200000, "SOC2-Type-I", 180, 0),
+        ("comp-initech", "Initech Solutions", "initech", "starter", "active", "hello@initech.dev", "+1-555-0300", "789 Startup Blvd, Austin", 25, 100000, "SOC2-Type-I", 90, 0),
+        ("comp-umbrella", "Umbrella Research", "umbrella", "enterprise", "suspended", "compliance@umbrella.org", "+1-555-0400", "321 Lab Drive, Boston", 200, 1000000, "SOC2-Type-II", 730, 1),
+    ]
+    for c in companies:
+        await conn.execute(
+            """INSERT INTO companies (id, name, slug, plan, status, contact_email, contact_phone, address,
+               max_users, max_requests_per_month, soc_compliance_level, data_retention_days, mfa_required,
+               created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (*c, now, now),
+        )
+
+    users = [
+        # Acme
+        ("user-a1", "comp-acme", "alice@acme.io", "Alice Chen", "admin", "active", 45, 0),
+        ("user-a2", "comp-acme", "bob@acme.io", "Bob Martinez", "operator", "active", 23, 0),
+        ("user-a3", "comp-acme", "carol@acme.io", "Carol Wu", "viewer", "active", 12, 0),
+        ("user-a4", "comp-acme", "dave@acme.io", "Dave Johnson", "operator", "suspended", 8, 3),
+        # Globex
+        ("user-g1", "comp-globex", "emma@globex.com", "Emma Davis", "admin", "active", 67, 0),
+        ("user-g2", "comp-globex", "frank@globex.com", "Frank Lee", "operator", "active", 34, 0),
+        ("user-g3", "comp-globex", "grace@globex.com", "Grace Kim", "viewer", "active", 5, 0),
+        # Initech
+        ("user-i1", "comp-initech", "hank@initech.dev", "Hank Patel", "admin", "active", 89, 0),
+        ("user-i2", "comp-initech", "iris@initech.dev", "Iris Nguyen", "operator", "active", 41, 0),
+        # Umbrella
+        ("user-u1", "comp-umbrella", "jake@umbrella.org", "Jake Thompson", "admin", "active", 120, 0),
+        ("user-u2", "comp-umbrella", "kate@umbrella.org", "Kate Robinson", "operator", "suspended", 56, 5),
+    ]
+    for u in users:
+        pw_hash = hashlib.sha256(("demo_" + u[0]).encode()).hexdigest()
+        await conn.execute(
+            """INSERT INTO users (id, company_id, email, display_name, role, status, password_hash,
+               login_count, failed_login_count, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (*u[:6], pw_hash, u[6], u[7], now, now),
+        )
+
+    # Seed some audit log entries
+    audit_events = [
+        ("user-a1", "alice@acme.io", "comp-acme", "user.login", "user", "user-a1", {}),
+        ("user-a1", "alice@acme.io", "comp-acme", "company.settings.updated", "company", "comp-acme", {"field": "mfa_required", "old": False, "new": True}),
+        ("user-a1", "alice@acme.io", "comp-acme", "user.suspended", "user", "user-a4", {"reason": "Policy violation"}),
+        ("user-g1", "emma@globex.com", "comp-globex", "user.created", "user", "user-g3", {"role": "viewer"}),
+        ("user-g1", "emma@globex.com", "comp-globex", "user.login", "user", "user-g1", {}),
+        ("user-i1", "hank@initech.dev", "comp-initech", "user.password_reset", "user", "user-i2", {}),
+        ("user-u1", "jake@umbrella.org", "comp-umbrella", "company.suspended", "company", "comp-umbrella", {"reason": "Compliance review"}),
+        ("user-a2", "bob@acme.io", "comp-acme", "user.login", "user", "user-a2", {}),
+        ("user-a1", "alice@acme.io", "comp-acme", "policy.created", "policy", "pol-123", {"name": "PII Detection v2"}),
+        ("user-g2", "frank@globex.com", "comp-globex", "user.login", "user", "user-g2", {}),
+    ]
+    for i, evt in enumerate(audit_events):
+        aid = f"audit-{uuid.uuid4().hex[:12]}"
+        await conn.execute(
+            """INSERT INTO audit_log (id, timestamp, actor_id, actor_email, company_id, action, target_type, target_id, details, ip_address)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (aid, now, evt[0], evt[1], evt[2], evt[3], evt[4], evt[5], json.dumps(evt[6]), f"10.0.{i}.1"),
+        )
+
+
+# ──────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────
+
+async def _audit(action: str, actor_id: str = "system", actor_email: str = "system",
+                 company_id: str = "", target_type: str = "", target_id: str = "",
+                 details: Optional[dict] = None, ip: str = ""):
+    """Append a SOC-compliant audit log entry."""
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            """INSERT INTO audit_log (id, timestamp, actor_id, actor_email, company_id, action, target_type, target_id, details, ip_address)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (f"audit-{uuid.uuid4().hex[:12]}", datetime.now(timezone.utc).isoformat(),
+             actor_id, actor_email, company_id, action, target_type, target_id,
+             json.dumps(details or {}), ip),
+        )
+        await conn.commit()
+
+
+def _row_dict(row) -> dict:
+    return dict(row)
+
+
+# ──────────────────────────────────────────────
+# Request Models
+# ──────────────────────────────────────────────
+
+class CompanyCreate(BaseModel):
+    name: str
+    slug: str
+    plan: str = "starter"
+    contact_email: str = ""
+    contact_phone: str = ""
+    address: str = ""
+    max_users: int = 50
+    max_requests_per_month: int = 100000
+    soc_compliance_level: str = "SOC2-Type-I"
+    data_retention_days: int = 90
+    mfa_required: bool = False
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = None
+    plan: Optional[str] = None
+    status: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    address: Optional[str] = None
+    max_users: Optional[int] = None
+    max_requests_per_month: Optional[int] = None
+    soc_compliance_level: Optional[str] = None
+    data_retention_days: Optional[int] = None
+    mfa_required: Optional[bool] = None
+    ip_whitelist: Optional[List[str]] = None
+
+class UserCreate(BaseModel):
+    email: str
+    display_name: str
+    role: str = "viewer"
+    company_id: str
+
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    role: Optional[str] = None
+    status: Optional[str] = None
+    mfa_enabled: Optional[bool] = None
+
+
+# ──────────────────────────────────────────────
+# Company endpoints
+# ──────────────────────────────────────────────
+
+@router.get("/companies")
+async def list_companies():
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute("SELECT * FROM companies ORDER BY name")
+        rows = await cur.fetchall()
+        companies = [_row_dict(r) for r in rows]
+
+    # Enrich with user counts and consumption
+    for c in companies:
+        async with aiosqlite.connect(db_path) as conn:
+            cur = await conn.execute("SELECT COUNT(*) FROM users WHERE company_id = ?", (c["id"],))
+            c["user_count"] = (await cur.fetchone())[0]
+            cur = await conn.execute("SELECT COUNT(*) FROM users WHERE company_id = ? AND status = 'active'", (c["id"],))
+            c["active_users"] = (await cur.fetchone())[0]
+        # Consumption from provenance (map callers to company via users)
+        async with aiosqlite.connect(db_path) as conn:
+            conn.row_factory = aiosqlite.Row
+            cur = await conn.execute(
+                "SELECT email FROM users WHERE company_id = ?", (c["id"],)
+            )
+            user_rows = await cur.fetchall()
+            emails = [r["email"] for r in user_rows]
+        if emails:
+            placeholders = ",".join("?" for _ in emails)
+            async with aiosqlite.connect(db_path) as conn:
+                cur = await conn.execute(
+                    f"SELECT COUNT(*) as cnt, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(estimated_cost_usd),0) as cost FROM provenance WHERE caller_id IN ({placeholders})",
+                    emails,
+                )
+                row = await cur.fetchone()
+                c["total_requests"] = row[0] if row else 0
+                c["total_tokens"] = row[1] if row else 0
+                c["total_cost"] = round(row[2], 4) if row else 0
+        else:
+            c["total_requests"] = 0
+            c["total_tokens"] = 0
+            c["total_cost"] = 0
+        # Parse ip_whitelist
+        try:
+            c["ip_whitelist"] = json.loads(c.get("ip_whitelist", "[]"))
+        except (json.JSONDecodeError, TypeError):
+            c["ip_whitelist"] = []
+
+    return companies
+
+
+@router.get("/companies/{company_id}")
+async def get_company(company_id: str):
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute("SELECT * FROM companies WHERE id = ?", (company_id,))
+        row = await cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Company not found")
+    c = _row_dict(row)
+    try:
+        c["ip_whitelist"] = json.loads(c.get("ip_whitelist", "[]"))
+    except (json.JSONDecodeError, TypeError):
+        c["ip_whitelist"] = []
+    return c
+
+
+@router.post("/companies")
+async def create_company(body: CompanyCreate):
+    cid = f"comp-{uuid.uuid4().hex[:8]}"
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(db_path) as conn:
+        try:
+            await conn.execute(
+                """INSERT INTO companies (id, name, slug, plan, status, contact_email, contact_phone, address,
+                   max_users, max_requests_per_month, soc_compliance_level, data_retention_days, mfa_required,
+                   created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (cid, body.name, body.slug, body.plan, "active", body.contact_email, body.contact_phone,
+                 body.address, body.max_users, body.max_requests_per_month, body.soc_compliance_level,
+                 body.data_retention_days, int(body.mfa_required), now, now),
+            )
+            await conn.commit()
+        except aiosqlite.IntegrityError:
+            raise HTTPException(409, "Company slug already exists")
+    await _audit("company.created", target_type="company", target_id=cid,
+                 details={"name": body.name, "slug": body.slug})
+    return {"id": cid, "status": "created"}
+
+
+@router.put("/companies/{company_id}")
+async def update_company(company_id: str, body: CompanyUpdate):
+    updates = body.dict(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    if "ip_whitelist" in updates:
+        updates["ip_whitelist"] = json.dumps(updates["ip_whitelist"])
+    if "mfa_required" in updates:
+        updates["mfa_required"] = int(updates["mfa_required"])
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [company_id]
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"UPDATE companies SET {set_clause} WHERE id = ?", vals)
+        await conn.commit()
+    await _audit("company.updated", company_id=company_id, target_type="company",
+                 target_id=company_id, details=updates)
+    return {"status": "updated"}
+
+
+@router.delete("/companies/{company_id}")
+async def delete_company(company_id: str):
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute("DELETE FROM users WHERE company_id = ?", (company_id,))
+        await conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
+        await conn.commit()
+    await _audit("company.deleted", target_type="company", target_id=company_id)
+    return {"status": "deleted"}
+
+
+# ──────────────────────────────────────────────
+# User endpoints
+# ──────────────────────────────────────────────
+
+@router.get("/companies/{company_id}/users")
+async def list_users(company_id: str):
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute(
+            "SELECT * FROM users WHERE company_id = ? ORDER BY display_name", (company_id,)
+        )
+        rows = await cur.fetchall()
+    users = []
+    for r in rows:
+        u = _row_dict(r)
+        u.pop("password_hash", None)
+        users.append(u)
+    return users
+
+
+@router.post("/companies/{company_id}/users")
+async def create_user(company_id: str, body: UserCreate):
+    uid = f"user-{uuid.uuid4().hex[:8]}"
+    now = datetime.now(timezone.utc).isoformat()
+    pw_hash = hashlib.sha256(f"welcome_{uid}".encode()).hexdigest()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            """INSERT INTO users (id, company_id, email, display_name, role, status, password_hash,
+               login_count, failed_login_count, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (uid, company_id, body.email, body.display_name, body.role, "active", pw_hash, 0, 0, now, now),
+        )
+        await conn.commit()
+    await _audit("user.created", company_id=company_id, target_type="user", target_id=uid,
+                 details={"email": body.email, "role": body.role})
+    return {"id": uid, "status": "created"}
+
+
+@router.put("/users/{user_id}")
+async def update_user(user_id: str, body: UserUpdate):
+    updates = body.dict(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    if "mfa_enabled" in updates:
+        updates["mfa_enabled"] = int(updates["mfa_enabled"])
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    vals = list(updates.values()) + [user_id]
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(f"UPDATE users SET {set_clause} WHERE id = ?", vals)
+        await conn.commit()
+    await _audit("user.updated", target_type="user", target_id=user_id, details=updates)
+    return {"status": "updated"}
+
+
+@router.post("/users/{user_id}/suspend")
+async def suspend_user(user_id: str):
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute("UPDATE users SET status = 'suspended', updated_at = ? WHERE id = ?", (now, user_id))
+        await conn.commit()
+    await _audit("user.suspended", target_type="user", target_id=user_id)
+    return {"status": "suspended"}
+
+
+@router.post("/users/{user_id}/activate")
+async def activate_user(user_id: str):
+    now = datetime.now(timezone.utc).isoformat()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            "UPDATE users SET status = 'active', failed_login_count = 0, locked_until = NULL, updated_at = ? WHERE id = ?",
+            (now, user_id),
+        )
+        await conn.commit()
+    await _audit("user.activated", target_type="user", target_id=user_id)
+    return {"status": "activated"}
+
+
+@router.post("/users/{user_id}/reset-password")
+async def reset_password(user_id: str):
+    now = datetime.now(timezone.utc).isoformat()
+    new_hash = hashlib.sha256(f"reset_{uuid.uuid4().hex}".encode()).hexdigest()
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            "UPDATE users SET password_hash = ?, failed_login_count = 0, locked_until = NULL, updated_at = ? WHERE id = ?",
+            (new_hash, now, user_id),
+        )
+        await conn.commit()
+    await _audit("user.password_reset", target_type="user", target_id=user_id)
+    return {"status": "password_reset", "message": "Temporary password generated"}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: str):
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        await conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        await conn.commit()
+    await _audit("user.deleted", target_type="user", target_id=user_id)
+    return {"status": "deleted"}
+
+
+# ──────────────────────────────────────────────
+# Audit log
+# ──────────────────────────────────────────────
+
+@router.get("/audit-log")
+async def get_audit_log(company_id: Optional[str] = None, limit: int = 100):
+    query = "SELECT * FROM audit_log"
+    params: list = []
+    if company_id:
+        query += " WHERE company_id = ?"
+        params.append(company_id)
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute(query, params)
+        rows = await cur.fetchall()
+    entries = []
+    for r in rows:
+        e = _row_dict(r)
+        if isinstance(e.get("details"), str):
+            try:
+                e["details"] = json.loads(e["details"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        entries.append(e)
+    return entries
+
+
+# ──────────────────────────────────────────────
+# Consumption / dashboard stats
+# ──────────────────────────────────────────────
+
+@router.get("/dashboard")
+async def admin_dashboard():
+    """Aggregate stats for the admin overview."""
+    async with aiosqlite.connect(db_path) as conn:
+        cur = await conn.execute("SELECT COUNT(*) FROM companies")
+        total_companies = (await cur.fetchone())[0]
+        cur = await conn.execute("SELECT COUNT(*) FROM companies WHERE status = 'active'")
+        active_companies = (await cur.fetchone())[0]
+        cur = await conn.execute("SELECT COUNT(*) FROM users")
+        total_users = (await cur.fetchone())[0]
+        cur = await conn.execute("SELECT COUNT(*) FROM users WHERE status = 'active'")
+        active_users = (await cur.fetchone())[0]
+        cur = await conn.execute("SELECT COUNT(*) FROM users WHERE status = 'suspended'")
+        suspended_users = (await cur.fetchone())[0]
+        cur = await conn.execute("SELECT COUNT(*) FROM audit_log")
+        audit_entries = (await cur.fetchone())[0]
+
+    # Provenance totals
+    async with aiosqlite.connect(db_path) as conn:
+        cur = await conn.execute("SELECT COUNT(*), COALESCE(SUM(total_tokens),0), COALESCE(SUM(estimated_cost_usd),0) FROM provenance")
+        row = await cur.fetchone()
+        total_requests = row[0] if row else 0
+        total_tokens = row[1] if row else 0
+        total_cost = round(row[2], 4) if row else 0
+
+    return {
+        "total_companies": total_companies,
+        "active_companies": active_companies,
+        "total_users": total_users,
+        "active_users": active_users,
+        "suspended_users": suspended_users,
+        "audit_entries": audit_entries,
+        "total_requests": total_requests,
+        "total_tokens": total_tokens,
+        "total_cost": total_cost,
+    }
