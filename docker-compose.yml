@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  tracemark:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - TRACEMARK_CONFIG=/app/config.yaml
+      - TRACEMARK_SECRET_KEY=${TRACEMARK_SECRET_KEY:-tracemark-dev-secret-change-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - TRACEMARK_DB_PATH=/app/tracemark_provenance.db
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  mock-enterprise-app:
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - TRACEMARK_PROXY_URL=http://tracemark:8080
+    entrypoint: >
+      python -c "
+      import asyncio, httpx, json, time
+      from fastapi import FastAPI
+      from fastapi.responses import JSONResponse
+      import uvicorn
+
+      app = FastAPI(title='Mock Enterprise App')
+
+      @app.get('/health')
+      def health():
+          return {'status': 'healthy', 'service': 'mock-enterprise-app'}
+
+      @app.post('/demo/ai-call')
+      async def make_ai_call():
+          async with httpx.AsyncClient() as client:
+              resp = await client.post(
+                  'http://tracemark:8080/v1/chat/completions',
+                  json={'model': 'gpt-4o', 'messages': [{'role': 'user', 'content': 'Summarize Q3 roadmap'}]},
+                  headers={'X-Tracemark-Caller': 'mock-enterprise-app', 'X-Tracemark-Session': 'demo'},
+                  timeout=30.0,
+              )
+              return JSONResponse(content=resp.json(), status_code=resp.status_code)
+
+      uvicorn.run(app, host='0.0.0.0', port=8081)
+      "
+    depends_on:
+      tracemark:
+        condition: service_healthy

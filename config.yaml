@@ -1,0 +1,66 @@
+# Tracemark MVP Configuration
+
+tracemark:
+  secret_key: 'tracemark-dev-secret-change-in-production'
+  log_level: INFO
+
+upstream:
+  provider: openai
+  base_url: 'https://api.openai.com/v1'
+  # API key from OPENAI_API_KEY env var
+  # Set to 'mock' to use built-in mock responses (no API key needed)
+  mock_mode: true
+
+policies:
+  - id: pii-detection
+    name: 'PII Detection'
+    enabled: true
+    type: BOTH
+    action: BLOCK
+    config:
+      patterns:
+        - name: email
+          regex: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        - name: phone
+          regex: '(\+?1[\s.-]?)?\(?[0-9]{3}\)?[\s.-]?[0-9]{3}[\s.-]?[0-9]{4}'
+        - name: credit_card
+          regex: '[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}[\s-]?[0-9]{4}'
+
+  - id: topic-blocklist
+    name: 'Forbidden Topics'
+    enabled: true
+    type: BOTH
+    action: BLOCK
+    config:
+      forbidden_topics:
+        - 'competitor pricing'
+        - 'legal advice'
+        - 'medical diagnosis'
+        - 'insider trading'
+
+  - id: confidence-check
+    name: 'Response Confidence Check'
+    enabled: true
+    type: POST_CALL
+    action: ALLOW_AND_LOG
+    config:
+      uncertainty_phrases:
+        - 'I am not sure'
+        - 'I cannot guarantee'
+        - 'you should consult'
+        - 'I may be wrong'
+        - 'this is not financial advice'
+
+action_registry:
+  EMAIL_SENT:
+    description: 'AI-generated email sent to customer'
+    compensating_action: retract_email
+    notify_compliance: true
+  CRM_UPDATED:
+    description: 'AI updated a CRM record'
+    compensating_action: restore_crm_record
+    notify_compliance: false
+  NOTIFICATION_SENT:
+    description: 'AI sent internal notification'
+    compensating_action: send_compliance_override
+    notify_compliance: true

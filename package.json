@@ -1,0 +1,13 @@
+{
+  "name": "tracemark",
+  "version": "0.1.0",
+  "description": "AI governance, control, and remediation infrastructure",
+  "private": true,
+  "scripts": {
+    "start": "echo 'Python app — see Dockerfile'",
+    "build": "echo 'No JS build step required'"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

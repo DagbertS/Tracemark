@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+*.db
+*.sqlite
+*.sqlite3
+tracemark_provenance.db
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+.DS_Store
