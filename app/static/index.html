@@ -176,7 +176,11 @@ body {
   border: 1px solid var(--border-subtle);
   padding: 16px 20px;
   text-align: center;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
 }
+.stat-tile:hover { background: var(--bg-card-hover); transform: translateY(-1px); }
+.stat-tile.active-filter { border-color: var(--teal-primary); background: rgba(0,198,184,0.10); box-shadow: 0 0 0 1px var(--teal-primary); }
 .stat-number { font-size: 28px; font-weight: 700; color: var(--teal-primary); }
 .stat-label { font-size: 12px; color: var(--text-primary); margin-top: 4px; }
 
@@ -193,7 +197,41 @@ th {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-subtle);
   white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color 150ms ease;
 }
+th:hover { color: var(--teal-primary); }
+th .sort-arrow { font-size: 10px; margin-left: 4px; opacity: 0.4; }
+th.sort-active .sort-arrow { opacity: 1; color: var(--teal-primary); }
+
+/* ── PROVENANCE SEARCH/FILTER BAR ── */
+.prov-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.prov-search {
+  flex: 1; min-width: 200px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 8px 12px 8px 32px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+.prov-search:focus { outline: none; border-color: var(--teal-primary); }
+.prov-search-wrap { position: relative; flex: 1; min-width: 200px; }
+.prov-search-wrap::before { content: '🔍'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.5; }
+.prov-filter-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.prov-filter-select:focus { outline: none; border-color: var(--teal-primary); }
+.prov-result-count { font-size: 11px; color: var(--text-muted); }
 td {
   padding: 10px 14px;
   font-size: 13px;
@@ -488,14 +526,17 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
     <!-- LIVE FEED TAB -->
     <div id="tab-feed" class="tab-content">
       <div class="stats-bar" id="statsBar">
-        <div class="stat-tile"><div class="stat-number" id="statTotal">0</div><div class="stat-label">Total Intercepted</div></div>
-        <div class="stat-tile"><div class="stat-number" id="statViolations">0</div><div class="stat-label">Violations Blocked</div></div>
-        <div class="stat-tile"><div class="stat-number" id="statRemediations">0</div><div class="stat-label">Remediations Executed</div></div>
-        <div class="stat-tile"><div class="stat-number" id="statChain">--</div><div class="stat-label">Chain Integrity</div></div>
-        <div class="stat-tile"><div class="stat-number" id="statCallers">0</div><div class="stat-label">Unique Callers</div></div>
-        <div class="stat-tile"><div class="stat-number" id="statSessions">0</div><div class="stat-label">Active Sessions</div></div>
+        <div class="stat-tile" data-filter="all" onclick="filterFeed('all')"><div class="stat-number" id="statTotal">0</div><div class="stat-label">Total Intercepted</div></div>
+        <div class="stat-tile" data-filter="blocked" onclick="filterFeed('blocked')"><div class="stat-number" id="statViolations">0</div><div class="stat-label">Violations Blocked</div></div>
+        <div class="stat-tile" data-filter="remediated" onclick="filterFeed('remediated')"><div class="stat-number" id="statRemediations">0</div><div class="stat-label">Remediations Executed</div></div>
+        <div class="stat-tile" data-filter="chain" onclick="filterFeed('chain')"><div class="stat-number" id="statChain">--</div><div class="stat-label">Chain Integrity</div></div>
+        <div class="stat-tile" data-filter="pass" onclick="filterFeed('pass')"><div class="stat-number" id="statCallers">0</div><div class="stat-label">Unique Callers</div></div>
+        <div class="stat-tile" data-filter="warning" onclick="filterFeed('warning')"><div class="stat-number" id="statSessions">0</div><div class="stat-label">Active Sessions</div></div>
       </div>
-      <div class="updated-ago" id="updatedAgo">Last updated just now</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="updated-ago" id="updatedAgo" style="margin-bottom:0">Last updated just now</div>
+        <div id="feedFilterLabel" style="font-size:11px;color:var(--teal-primary);font-weight:600;display:none">Showing: <span id="feedFilterText"></span> <span style="cursor:pointer;margin-left:6px;color:var(--red-violation)" onclick="filterFeed('all')">✕ Clear</span></div>
+      </div>
       <div id="feedList"></div>
     </div>
 
@@ -505,23 +546,42 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
         <div class="section-title" style="margin-bottom:0">Provenance Trail</div>
         <button class="btn-primary" onclick="verifyChain()">Verify Chain</button>
       </div>
+      <div class="prov-toolbar">
+        <div class="prov-search-wrap">
+          <input type="text" class="prov-search" id="provSearch" placeholder="Search by ID, model, caller, prompt..." oninput="applyProvenanceFilters()">
+        </div>
+        <select class="prov-filter-select" id="provVerdictFilter" onchange="applyProvenanceFilters()">
+          <option value="">All Verdicts</option>
+          <option value="PASS">PASS</option>
+          <option value="BLOCKED">BLOCKED</option>
+          <option value="WARNING">WARNING</option>
+          <option value="REMEDIATED">REMEDIATED</option>
+        </select>
+        <select class="prov-filter-select" id="provModelFilter" onchange="applyProvenanceFilters()">
+          <option value="">All Models</option>
+        </select>
+        <select class="prov-filter-select" id="provCallerFilter" onchange="applyProvenanceFilters()">
+          <option value="">All Callers</option>
+        </select>
+        <span class="prov-result-count" id="provResultCount"></span>
+      </div>
       <div class="table-container">
         <table>
           <thead><tr>
-            <th>Entry ID</th>
-            <th>Timestamp</th>
-            <th>Model</th>
-            <th>Caller</th>
-            <th>Verdict</th>
-            <th>Tokens In</th>
-            <th>Tokens Out</th>
-            <th>Total Tokens</th>
-            <th>Est. Cost</th>
-            <th>Latency</th>
-            <th>Finish</th>
-            <th>Sys Fingerprint</th>
-            <th>Routing</th>
-            <th>Log Probs</th>
+            <th data-sort="id" onclick="sortProvenance('id')">Entry ID <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="timestamp" onclick="sortProvenance('timestamp')" class="sort-active">Timestamp <span class="sort-arrow">▼</span></th>
+            <th data-sort="upstream_model" onclick="sortProvenance('upstream_model')">Model <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="caller_id" onclick="sortProvenance('caller_id')">Caller <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="overall_verdict" onclick="sortProvenance('overall_verdict')">Verdict <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="prompt_tokens" onclick="sortProvenance('prompt_tokens')">Tokens In <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="completion_tokens" onclick="sortProvenance('completion_tokens')">Tokens Out <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="total_tokens" onclick="sortProvenance('total_tokens')">Total Tokens <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="estimated_cost_usd" onclick="sortProvenance('estimated_cost_usd')">Est. Cost <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="latency_ms" onclick="sortProvenance('latency_ms')">Latency <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="finish_reason" onclick="sortProvenance('finish_reason')">Finish <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="system_fingerprint" onclick="sortProvenance('system_fingerprint')">Sys Fingerprint <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="model_routing" onclick="sortProvenance('model_routing')">Routing <span class="sort-arrow">▲▼</span></th>
+            <th data-sort="logprobs" onclick="sortProvenance('logprobs')">Log Probs <span class="sort-arrow">▲▼</span></th>
           </tr></thead>
           <tbody id="provenanceTable"></tbody>
         </table>
@@ -724,6 +784,11 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 <script>
 const API = '';
 let lastUpdate = Date.now();
+let activeFeedFilter = 'all';
+let allFeedEntries = [];
+let allProvenanceEntries = [];
+let provSortKey = 'timestamp';
+let provSortDir = 'desc';
 
 function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -770,10 +835,12 @@ function escHtml(s) {
 async function loadFeed() {
   try {
     const [entries, stats, chain] = await Promise.all([
-      fetch(API + '/api/provenance?limit=20').then(r => r.json()),
+      fetch(API + '/api/provenance?limit=200').then(r => r.json()),
       fetch(API + '/api/provenance/stats').then(r => r.json()),
       fetch(API + '/api/provenance/verify').then(r => r.json()),
     ]);
+
+    allFeedEntries = entries;
 
     document.getElementById('statTotal').textContent = stats.total_intercepted || 0;
     document.getElementById('statViolations').textContent = stats.violations_blocked || 0;
@@ -787,17 +854,60 @@ async function loadFeed() {
     document.getElementById('statCallers').textContent = uniqueCallers.size;
     document.getElementById('statSessions').textContent = uniqueSessions.size;
 
+    // Apply active filter
+    renderFeedEntries(filterFeedEntries(entries));
+
+    lastUpdate = Date.now();
+  } catch (err) {
+    console.error('Feed load error:', err);
+  }
+}
+
+function filterFeed(filterType) {
+  activeFeedFilter = filterType;
+  // Update active tile highlight
+  document.querySelectorAll('.stat-tile').forEach(t => t.classList.remove('active-filter'));
+  if (filterType !== 'all') {
+    const tile = document.querySelector('.stat-tile[data-filter="' + filterType + '"]');
+    if (tile) tile.classList.add('active-filter');
+  }
+  // Show/hide filter label
+  const filterLabel = document.getElementById('feedFilterLabel');
+  const filterText = document.getElementById('feedFilterText');
+  if (filterType === 'all') {
+    filterLabel.style.display = 'none';
+  } else {
+    filterLabel.style.display = 'inline';
+    const labels = {blocked: 'Violations Blocked', remediated: 'Remediations', pass: 'PASS Only', warning: 'Warnings Only', chain: 'All (Chain OK)'};
+    filterText.textContent = labels[filterType] || filterType;
+  }
+  renderFeedEntries(filterFeedEntries(allFeedEntries));
+}
+
+function filterFeedEntries(entries) {
+  if (activeFeedFilter === 'all' || activeFeedFilter === 'chain') return entries;
+  return entries.filter(e => {
+    const v = (e.overall_verdict || '').toUpperCase();
+    if (activeFeedFilter === 'blocked') return v === 'BLOCKED';
+    if (activeFeedFilter === 'pass') return v === 'PASS';
+    if (activeFeedFilter === 'warning') return v === 'WARNING';
+    if (activeFeedFilter === 'remediated') return v === 'REMEDIATED' || !!e.remediation_id;
+    return true;
+  });
+}
+
+// Session color helper
+function sessionColor(sid) {
+  if (!sid) return 'transparent';
+  let h = 0; for (let i = 0; i < sid.length; i++) h = sid.charCodeAt(i) + ((h << 5) - h);
+  return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 50%)';
+}
+
+function renderFeedEntries(entries) {
     const list = document.getElementById('feedList');
     if (!entries.length) {
-      list.innerHTML = '<div class="card"><div class="card-subtext">No intercepted calls yet. Run demo.sh to generate activity.</div></div>';
+      list.innerHTML = '<div class="card"><div class="card-subtext">No entries match the current filter.</div></div>';
       return;
-    }
-
-    // Session color helper
-    function sessionColor(sid) {
-      if (!sid) return 'transparent';
-      let h = 0; for (let i = 0; i < sid.length; i++) h = sid.charCodeAt(i) + ((h << 5) - h);
-      return 'hsl(' + (Math.abs(h) % 360) + ', 60%, 50%)';
     }
 
     list.innerHTML = entries.map((e, idx) => {
@@ -899,17 +1009,102 @@ async function loadFeed() {
         paramBadges + policyBreakdown +
         extra + ioPreview + '</div>';
     }).join('');
-
-    lastUpdate = Date.now();
-  } catch (err) {
-    console.error('Feed load error:', err);
-  }
 }
 
 // ── PROVENANCE TABLE ──
 async function loadProvenance() {
   try {
-    const entries = await fetch(API + '/api/provenance?limit=100').then(r => r.json());
+    const entries = await fetch(API + '/api/provenance?limit=500').then(r => r.json());
+    allProvenanceEntries = entries;
+
+    // Populate model & caller filter dropdowns
+    const models = [...new Set(entries.map(e => e.upstream_model).filter(Boolean))].sort();
+    const callers = [...new Set(entries.map(e => e.caller_id).filter(Boolean))].sort();
+    const modelSel = document.getElementById('provModelFilter');
+    const callerSel = document.getElementById('provCallerFilter');
+    const curModel = modelSel.value;
+    const curCaller = callerSel.value;
+    modelSel.innerHTML = '<option value="">All Models</option>' + models.map(m => '<option value="' + escHtml(m) + '">' + escHtml(m) + '</option>').join('');
+    callerSel.innerHTML = '<option value="">All Callers</option>' + callers.map(c => '<option value="' + escHtml(c) + '">' + escHtml(c) + '</option>').join('');
+    modelSel.value = curModel;
+    callerSel.value = curCaller;
+
+    applyProvenanceFilters();
+  } catch (err) {
+    console.error('Provenance load error:', err);
+  }
+}
+
+function applyProvenanceFilters() {
+  const searchTerm = (document.getElementById('provSearch').value || '').toLowerCase();
+  const verdictFilter = document.getElementById('provVerdictFilter').value;
+  const modelFilter = document.getElementById('provModelFilter').value;
+  const callerFilter = document.getElementById('provCallerFilter').value;
+
+  let filtered = allProvenanceEntries.filter(e => {
+    if (verdictFilter && e.overall_verdict !== verdictFilter) return false;
+    if (modelFilter && e.upstream_model !== modelFilter) return false;
+    if (callerFilter && e.caller_id !== callerFilter) return false;
+    if (searchTerm) {
+      const haystack = [
+        e.id, e.upstream_model, e.caller_id, e.session_id, e.overall_verdict,
+        e.finish_reason, e.system_fingerprint, JSON.stringify(e.request_body || ''),
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    return true;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    let va = a[provSortKey], vb = b[provSortKey];
+    // Handle nested sort keys
+    if (provSortKey === 'model_routing') {
+      va = (a.model_routing || {}).region || '';
+      vb = (b.model_routing || {}).region || '';
+    }
+    if (provSortKey === 'logprobs') {
+      const la = (a.logprobs || {}).token_logprobs;
+      const lb = (b.logprobs || {}).token_logprobs;
+      va = la ? la.reduce((s,x)=>s+x,0)/la.length : -999;
+      vb = lb ? lb.reduce((s,x)=>s+x,0)/lb.length : -999;
+    }
+    if (va == null) va = '';
+    if (vb == null) vb = '';
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return provSortDir === 'asc' ? va - vb : vb - va;
+    }
+    va = String(va); vb = String(vb);
+    return provSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+
+  document.getElementById('provResultCount').textContent = filtered.length + ' of ' + allProvenanceEntries.length + ' entries';
+  renderProvenanceTable(filtered);
+}
+
+function sortProvenance(key) {
+  if (provSortKey === key) {
+    provSortDir = provSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    provSortKey = key;
+    provSortDir = 'asc';
+  }
+  // Update header arrows
+  document.querySelectorAll('#tab-provenance th').forEach(th => {
+    th.classList.remove('sort-active');
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = '▲▼';
+  });
+  const activeTh = document.querySelector('#tab-provenance th[data-sort="' + key + '"]');
+  if (activeTh) {
+    activeTh.classList.add('sort-active');
+    const arrow = activeTh.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = provSortDir === 'asc' ? '▲' : '▼';
+  }
+  applyProvenanceFilters();
+}
+
+function renderProvenanceTable(entries) {
     const tbody = document.getElementById('provenanceTable');
     tbody.innerHTML = entries.map(e => {
       const routing = e.model_routing || {};
@@ -934,9 +1129,6 @@ async function loadProvenance() {
       '</tr>' +
       '<tr class="drawer"><td colspan="14"><pre>' + syntaxHighlight(JSON.stringify(e, null, 2)) + '</pre></td></tr>';
     }).join('');
-  } catch (err) {
-    console.error('Provenance load error:', err);
-  }
 }
 
 function syntaxHighlight(json) {
