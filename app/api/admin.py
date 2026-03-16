@@ -133,6 +133,44 @@ CREATE TABLE IF NOT EXISTS sessions (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+CREATE TABLE IF NOT EXISTS visitors (
+    id TEXT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    ip_address TEXT DEFAULT '',
+    user_agent TEXT DEFAULT '',
+    platform TEXT DEFAULT '',
+    browser TEXT DEFAULT '',
+    browser_version TEXT DEFAULT '',
+    os TEXT DEFAULT '',
+    device_type TEXT DEFAULT '',
+    screen_width INTEGER DEFAULT 0,
+    screen_height INTEGER DEFAULT 0,
+    viewport_width INTEGER DEFAULT 0,
+    viewport_height INTEGER DEFAULT 0,
+    color_depth INTEGER DEFAULT 0,
+    pixel_ratio REAL DEFAULT 1.0,
+    language TEXT DEFAULT '',
+    languages TEXT DEFAULT '[]',
+    timezone TEXT DEFAULT '',
+    timezone_offset INTEGER DEFAULT 0,
+    referrer TEXT DEFAULT '',
+    page_url TEXT DEFAULT '',
+    page_path TEXT DEFAULT '',
+    connection_type TEXT DEFAULT '',
+    cookie_enabled INTEGER DEFAULT 1,
+    do_not_track INTEGER DEFAULT 0,
+    hardware_concurrency INTEGER DEFAULT 0,
+    device_memory REAL DEFAULT 0,
+    touch_support INTEGER DEFAULT 0,
+    session_id TEXT DEFAULT '',
+    visit_count INTEGER DEFAULT 1,
+    country TEXT DEFAULT '',
+    city TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_visitors_timestamp ON visitors(timestamp);
+CREATE INDEX IF NOT EXISTS idx_visitors_session ON visitors(session_id);
+CREATE INDEX IF NOT EXISTS idx_visitors_ip ON visitors(ip_address);
 """
 
 ADMIN_MIGRATIONS = [
@@ -729,4 +767,172 @@ async def admin_dashboard():
         "total_revenue": total_revenue,
         "regions": regions,
         "cohorts": cohorts,
+    }
+
+
+# ──────────────────────────────────────────────
+# Visitor Tracking
+# ──────────────────────────────────────────────
+
+def _parse_user_agent(ua: str) -> dict:
+    """Extract browser, OS, and device info from user-agent string."""
+    browser = browser_version = os_name = device_type = ""
+
+    # OS detection
+    if "Windows" in ua:
+        os_name = "Windows"
+    elif "Macintosh" in ua or "Mac OS" in ua:
+        os_name = "macOS"
+    elif "Linux" in ua:
+        os_name = "Linux"
+    elif "Android" in ua:
+        os_name = "Android"
+    elif "iPhone" in ua or "iPad" in ua:
+        os_name = "iOS"
+    elif "CrOS" in ua:
+        os_name = "ChromeOS"
+
+    # Browser detection
+    if "Edg/" in ua:
+        browser = "Edge"
+        idx = ua.find("Edg/")
+        browser_version = ua[idx+4:].split(" ")[0]
+    elif "OPR/" in ua or "Opera" in ua:
+        browser = "Opera"
+        idx = ua.find("OPR/")
+        if idx > -1:
+            browser_version = ua[idx+4:].split(" ")[0]
+    elif "Chrome/" in ua and "Safari/" in ua:
+        browser = "Chrome"
+        idx = ua.find("Chrome/")
+        browser_version = ua[idx+7:].split(" ")[0]
+    elif "Firefox/" in ua:
+        browser = "Firefox"
+        idx = ua.find("Firefox/")
+        browser_version = ua[idx+8:].split(" ")[0]
+    elif "Safari/" in ua and "Chrome" not in ua:
+        browser = "Safari"
+        idx = ua.find("Version/")
+        if idx > -1:
+            browser_version = ua[idx+8:].split(" ")[0]
+
+    # Device type
+    if "Mobile" in ua or "Android" in ua and "Mobile" in ua:
+        device_type = "Mobile"
+    elif "iPad" in ua or "Tablet" in ua:
+        device_type = "Tablet"
+    elif ua:
+        device_type = "Desktop"
+
+    return {
+        "browser": browser, "browser_version": browser_version,
+        "os": os_name, "device_type": device_type,
+    }
+
+
+class VisitorPayload(BaseModel):
+    screen_width: int = 0
+    screen_height: int = 0
+    viewport_width: int = 0
+    viewport_height: int = 0
+    color_depth: int = 0
+    pixel_ratio: float = 1.0
+    language: str = ""
+    languages: List[str] = []
+    timezone: str = ""
+    timezone_offset: int = 0
+    referrer: str = ""
+    page_url: str = ""
+    page_path: str = ""
+    connection_type: str = ""
+    cookie_enabled: bool = True
+    do_not_track: bool = False
+    hardware_concurrency: int = 0
+    device_memory: float = 0
+    touch_support: bool = False
+    session_id: str = ""
+
+
+@router.post("/visitors/track")
+async def track_visitor(payload: VisitorPayload, request: Request):
+    """Record a page visit with all capturable browser metadata."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    visitor_id = str(uuid.uuid4())
+
+    # Extract IP
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    if not ip:
+        ip = request.client.host if request.client else ""
+
+    # Parse UA
+    ua_raw = request.headers.get("user-agent", "")
+    ua_info = _parse_user_agent(ua_raw)
+
+    # Check for existing session to increment visit count
+    visit_count = 1
+    if payload.session_id:
+        async with aiosqlite.connect(db_path) as conn:
+            cur = await conn.execute(
+                "SELECT COUNT(*) FROM visitors WHERE session_id = ?",
+                (payload.session_id,),
+            )
+            row = await cur.fetchone()
+            visit_count = (row[0] or 0) + 1
+
+    async with aiosqlite.connect(db_path) as conn:
+        await conn.execute(
+            """INSERT INTO visitors (
+                id, timestamp, ip_address, user_agent, platform, browser, browser_version,
+                os, device_type, screen_width, screen_height, viewport_width, viewport_height,
+                color_depth, pixel_ratio, language, languages, timezone, timezone_offset,
+                referrer, page_url, page_path, connection_type, cookie_enabled, do_not_track,
+                hardware_concurrency, device_memory, touch_support, session_id, visit_count
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                visitor_id, now_iso, ip, ua_raw, ua_info.get("os", ""),
+                ua_info["browser"], ua_info["browser_version"], ua_info["os"],
+                ua_info["device_type"],
+                payload.screen_width, payload.screen_height,
+                payload.viewport_width, payload.viewport_height,
+                payload.color_depth, payload.pixel_ratio,
+                payload.language, json.dumps(payload.languages),
+                payload.timezone, payload.timezone_offset,
+                payload.referrer, payload.page_url, payload.page_path,
+                payload.connection_type,
+                1 if payload.cookie_enabled else 0,
+                1 if payload.do_not_track else 0,
+                payload.hardware_concurrency, payload.device_memory,
+                1 if payload.touch_support else 0,
+                payload.session_id, visit_count,
+            ),
+        )
+        await conn.commit()
+
+    return {"status": "ok", "visitor_id": visitor_id, "visit_count": visit_count}
+
+
+@router.get("/visitors")
+async def list_visitors(limit: int = 100, offset: int = 0):
+    """Return recent visitors with all captured metadata."""
+    async with aiosqlite.connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute(
+            "SELECT * FROM visitors ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        rows = [dict(r) for r in await cur.fetchall()]
+        cur2 = await conn.execute("SELECT COUNT(*) FROM visitors")
+        total = (await cur2.fetchone())[0]
+
+        # Summary stats
+        cur3 = await conn.execute("SELECT COUNT(DISTINCT ip_address) FROM visitors")
+        unique_ips = (await cur3.fetchone())[0]
+        cur4 = await conn.execute("SELECT COUNT(DISTINCT session_id) FROM visitors WHERE session_id != ''")
+        unique_sessions = (await cur4.fetchone())[0]
+
+    return {
+        "visitors": rows,
+        "total": total,
+        "unique_ips": unique_ips,
+        "unique_sessions": unique_sessions,
     }

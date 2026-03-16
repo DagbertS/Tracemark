@@ -882,6 +882,14 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       <div id="platformClientList"></div>
       <!-- Expandable client detail -->
       <div id="platformClientDetail" class="admin-detail-panel" style="margin-top:16px;display:none"></div>
+
+      <!-- Visitors section -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:28px;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">👥 Visitors</div>
+        <button class="btn-secondary" onclick="loadVisitors()" style="font-size:11px;padding:5px 10px">↻ Refresh</button>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.8em;margin-bottom:12px">Real-time capture of every page visit — browser fingerprint, device, network, screen, locale, and session data.</p>
+      <div id="visitorsSection"></div>
     </div>
 
   </main>
@@ -1074,7 +1082,7 @@ function switchTab(tab) {
   if (tab === 'chain') verifyChainFull();
   if (tab === 'policies') loadPendingPolicies();
   if (tab === 'admin') loadClientAdmin();
-  if (tab === 'platform-admin') { loadPlatformAdmin(); loadPlatformFilters(); }
+  if (tab === 'platform-admin') { loadPlatformAdmin(); loadPlatformFilters(); loadVisitors(); }
 }
 
 function toggleSidebar() {
@@ -2500,6 +2508,134 @@ async function adminDeleteUser(id) {
 function updateAgo() {
   const secs = Math.round((Date.now() - lastUpdate) / 1000);
   document.getElementById('updatedAgo').textContent = secs < 3 ? 'Last updated just now' : 'Last updated ' + secs + 's ago';
+}
+
+// ── VISITOR TRACKING ──
+(function trackVisitor() {
+  // Generate or retrieve a persistent session ID
+  let sid = '';
+  try { sid = sessionStorage.getItem('tm_session') || ''; } catch(e) {}
+  if (!sid) {
+    sid = 'sess-' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    try { sessionStorage.setItem('tm_session', sid); } catch(e) {}
+  }
+
+  const nav = navigator || {};
+  const conn = nav.connection || nav.mozConnection || nav.webkitConnection || {};
+  const payload = {
+    screen_width: screen.width || 0,
+    screen_height: screen.height || 0,
+    viewport_width: window.innerWidth || 0,
+    viewport_height: window.innerHeight || 0,
+    color_depth: screen.colorDepth || 0,
+    pixel_ratio: window.devicePixelRatio || 1,
+    language: nav.language || '',
+    languages: nav.languages ? Array.from(nav.languages) : [],
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    timezone_offset: new Date().getTimezoneOffset(),
+    referrer: document.referrer || '',
+    page_url: window.location.href || '',
+    page_path: window.location.pathname || '',
+    connection_type: conn.effectiveType || conn.type || '',
+    cookie_enabled: nav.cookieEnabled !== false,
+    do_not_track: nav.doNotTrack === '1' || nav.doNotTrack === 'yes',
+    hardware_concurrency: nav.hardwareConcurrency || 0,
+    device_memory: nav.deviceMemory || 0,
+    touch_support: 'ontouchstart' in window || (nav.maxTouchPoints || 0) > 0,
+    session_id: sid,
+  };
+
+  fetch(API + '/api/admin/visitors/track', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  }).catch(function() {});
+})();
+
+// ── VISITORS (Platform Admin) ──
+async function loadVisitors() {
+  try {
+    const data = await fetch(API + '/api/admin/visitors?limit=200').then(r => r.json());
+    const el = document.getElementById('visitorsSection');
+    if (!el) return;
+
+    const visitors = data.visitors || [];
+    const total = data.total || 0;
+    const uniqueIps = data.unique_ips || 0;
+    const uniqueSessions = data.unique_sessions || 0;
+
+    // Build summary stats
+    const browsers = {};
+    const oses = {};
+    const devices = {};
+    const countries = {};
+    visitors.forEach(function(v) {
+      if (v.browser) browsers[v.browser] = (browsers[v.browser] || 0) + 1;
+      if (v.os) oses[v.os] = (oses[v.os] || 0) + 1;
+      if (v.device_type) devices[v.device_type] = (devices[v.device_type] || 0) + 1;
+    });
+
+    el.innerHTML =
+      // Stats row
+      '<div class="admin-grid" style="margin-bottom:16px">' +
+      '<div class="admin-stat"><div class="admin-stat-num">' + total + '</div><div class="admin-stat-label">Total Page Views</div></div>' +
+      '<div class="admin-stat"><div class="admin-stat-num">' + uniqueIps + '</div><div class="admin-stat-label">Unique IPs</div></div>' +
+      '<div class="admin-stat"><div class="admin-stat-num">' + uniqueSessions + '</div><div class="admin-stat-label">Unique Sessions</div></div>' +
+      '<div class="admin-stat"><div class="admin-stat-num">' + Object.keys(browsers).length + '</div><div class="admin-stat-label">Browser Types</div></div>' +
+      '</div>' +
+
+      // Breakdown badges
+      '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+      '<div><span style="font-size:11px;color:var(--text-muted)">Browsers:</span> ' + Object.entries(browsers).map(function(e) { return '<span class="badge badge-indeterminate" style="margin:2px">' + e[0] + ' (' + e[1] + ')</span>'; }).join('') + '</div>' +
+      '<div><span style="font-size:11px;color:var(--text-muted)">OS:</span> ' + Object.entries(oses).map(function(e) { return '<span class="badge badge-pass" style="margin:2px">' + e[0] + ' (' + e[1] + ')</span>'; }).join('') + '</div>' +
+      '<div><span style="font-size:11px;color:var(--text-muted)">Devices:</span> ' + Object.entries(devices).map(function(e) { return '<span class="badge badge-warning" style="margin:2px">' + e[0] + ' (' + e[1] + ')</span>'; }).join('') + '</div>' +
+      '</div>' +
+
+      // Search
+      '<div style="margin-bottom:12px"><input class="prov-search" id="visitorSearch" placeholder="Search visitors by IP, browser, OS, referrer..." oninput="filterVisitorTable()" style="width:100%;max-width:400px;font-size:12px"></div>' +
+
+      // Table
+      '<div class="table-container"><table id="visitorTable">' +
+      '<thead><tr>' +
+      '<th>Timestamp</th><th>IP Address</th><th>Browser</th><th>OS</th><th>Device</th>' +
+      '<th>Screen</th><th>Viewport</th><th>Language</th><th>Timezone</th>' +
+      '<th>Referrer</th><th>Page</th><th>Connection</th>' +
+      '<th>Cores</th><th>Memory</th><th>Touch</th><th>DNT</th><th>Session</th><th>Visits</th>' +
+      '</tr></thead><tbody id="visitorTableBody">' +
+      visitors.map(function(v) {
+        return '<tr>' +
+          '<td style="white-space:nowrap;font-size:11px">' + fmtDate(v.timestamp) + '</td>' +
+          '<td class="mono" style="font-size:11px">' + escHtml(v.ip_address || '-') + '</td>' +
+          '<td>' + escHtml(v.browser || '-') + (v.browser_version ? ' <span style="color:var(--text-muted);font-size:10px">' + escHtml(v.browser_version.split('.')[0]) + '</span>' : '') + '</td>' +
+          '<td>' + escHtml(v.os || '-') + '</td>' +
+          '<td><span class="badge ' + (v.device_type === 'Mobile' ? 'badge-warning' : v.device_type === 'Tablet' ? 'badge-indeterminate' : 'badge-pass') + '" style="font-size:10px">' + escHtml(v.device_type || '-') + '</span></td>' +
+          '<td style="font-size:11px">' + (v.screen_width || '-') + '×' + (v.screen_height || '-') + '</td>' +
+          '<td style="font-size:11px">' + (v.viewport_width || '-') + '×' + (v.viewport_height || '-') + '</td>' +
+          '<td style="font-size:11px">' + escHtml(v.language || '-') + '</td>' +
+          '<td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="' + escHtml(v.timezone || '') + '">' + escHtml(v.timezone || '-') + '</td>' +
+          '<td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis" title="' + escHtml(v.referrer || '') + '">' + (v.referrer ? escHtml(v.referrer.replace(/https?:\/\//, '').split('/')[0]) : '<span style="color:var(--text-muted)">direct</span>') + '</td>' +
+          '<td style="font-size:11px;max-width:80px;overflow:hidden;text-overflow:ellipsis" title="' + escHtml(v.page_path || '') + '">' + escHtml(v.page_path || '/') + '</td>' +
+          '<td style="font-size:11px">' + escHtml(v.connection_type || '-') + '</td>' +
+          '<td style="text-align:center;font-size:11px">' + (v.hardware_concurrency || '-') + '</td>' +
+          '<td style="text-align:center;font-size:11px">' + (v.device_memory ? v.device_memory + 'GB' : '-') + '</td>' +
+          '<td style="text-align:center">' + (v.touch_support ? '👆' : '-') + '</td>' +
+          '<td style="text-align:center">' + (v.do_not_track ? '🛡' : '-') + '</td>' +
+          '<td class="mono" style="font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis" title="' + escHtml(v.session_id || '') + '">' + escHtml((v.session_id || '').substring(0, 12)) + '</td>' +
+          '<td style="text-align:center;font-weight:600">' + (v.visit_count || 1) + '</td>' +
+          '</tr>';
+      }).join('') +
+      '</tbody></table></div>';
+  } catch (err) {
+    console.error('Visitors load error:', err);
+  }
+}
+
+function filterVisitorTable() {
+  var query = (document.getElementById('visitorSearch').value || '').toLowerCase();
+  var rows = document.querySelectorAll('#visitorTableBody tr');
+  rows.forEach(function(row) {
+    row.style.display = row.textContent.toLowerCase().includes(query) ? '' : 'none';
+  });
 }
 
 // ── INIT ──
