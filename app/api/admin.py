@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 # Module-level reference — wired up in main.py lifespan
 db_path: str = "tracemark_provenance.db"
+visitor_db_path: str = "/data/visitors.db"  # Separate persistent DB for visitor tracking
 
 # ──────────────────────────────────────────────
 # Schema
@@ -134,6 +136,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+"""
+
+# Visitor tracking lives in a separate persistent DB so it survives deploys
+VISITOR_SCHEMA = """
 CREATE TABLE IF NOT EXISTS visitors (
     id TEXT PRIMARY KEY,
     timestamp TEXT NOT NULL,
@@ -210,6 +216,20 @@ async def initialize_admin_db(path: str):
             await _seed_demo_data(conn)
             await conn.commit()
     logger.info("Admin DB initialized")
+
+
+async def initialize_visitor_db(path: str):
+    """Create visitor table in a separate persistent DB file."""
+    global visitor_db_path
+    visitor_db_path = path
+    # Ensure parent directory exists
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    async with aiosqlite.connect(visitor_db_path) as conn:
+        await conn.executescript(VISITOR_SCHEMA)
+        await conn.commit()
+    logger.info(f"Visitor DB initialized at {visitor_db_path}")
 
 
 async def _seed_demo_data(conn: aiosqlite.Connection):
@@ -871,7 +891,7 @@ async def track_visitor(payload: VisitorPayload, request: Request):
     # Check for existing session to increment visit count
     visit_count = 1
     if payload.session_id:
-        async with aiosqlite.connect(db_path) as conn:
+        async with aiosqlite.connect(visitor_db_path) as conn:
             cur = await conn.execute(
                 "SELECT COUNT(*) FROM visitors WHERE session_id = ?",
                 (payload.session_id,),
@@ -879,7 +899,7 @@ async def track_visitor(payload: VisitorPayload, request: Request):
             row = await cur.fetchone()
             visit_count = (row[0] or 0) + 1
 
-    async with aiosqlite.connect(db_path) as conn:
+    async with aiosqlite.connect(visitor_db_path) as conn:
         await conn.execute(
             """INSERT INTO visitors (
                 id, timestamp, ip_address, user_agent, platform, browser, browser_version,
@@ -914,7 +934,7 @@ async def track_visitor(payload: VisitorPayload, request: Request):
 @router.get("/visitors")
 async def list_visitors(limit: int = 100, offset: int = 0):
     """Return recent visitors with all captured metadata."""
-    async with aiosqlite.connect(db_path) as conn:
+    async with aiosqlite.connect(visitor_db_path) as conn:
         conn.row_factory = aiosqlite.Row
         cur = await conn.execute(
             "SELECT * FROM visitors ORDER BY timestamp DESC LIMIT ? OFFSET ?",

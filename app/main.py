@@ -136,12 +136,20 @@ async def lifespan(app: FastAPI):
     # Initialize admin multi-tenant DB
     await admin_api.initialize_admin_db(db_path)
 
+    # Initialize persistent visitor DB (separate file for deploy persistence)
+    # On Railway, /data is a mounted volume that survives deploys
+    # Locally, fall back to a file next to the main DB
+    default_visitor_path = "/data/visitors.db" if os.path.isdir("/data") else "visitors.db"
+    visitor_db = os.environ.get("VISITOR_DB_PATH", default_visitor_path)
+    await admin_api.initialize_visitor_db(visitor_db)
+
     logger.info("Tracemark infrastructure initialized")
     logger.info(f"  Policies loaded: {len(pe.policies)}")
     logger.info(f"  Mock mode: {proxy.upstream_config['mock_mode']}")
     logger.info(f"  Sanitization: {'enabled' if se.enabled else 'disabled'}")
     logger.info(f"  Provenance DB: {db_path}")
     logger.info(f"  Connectors registered: {len(cr.list_connectors())}")
+    logger.info(f"  Visitor DB: {visitor_db}")
 
     yield
 

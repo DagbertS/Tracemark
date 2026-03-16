@@ -7,3 +7,9 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+
+# Persistent volume for visitor tracking data
+# After deploying, add a volume in Railway dashboard:
+#   Settings → Volumes → Add Volume → Mount Path: /data
+[[volumes]]
+mount = "/data"
