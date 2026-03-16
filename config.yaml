@@ -7,9 +7,13 @@ tracemark:
 upstream:
   provider: openai
   base_url: 'https://api.openai.com/v1'
-  # API key from OPENAI_API_KEY env var
-  # Set to 'mock' to use built-in mock responses (no API key needed)
+  # API keys from env vars: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY
+  # Set mock_mode to false to forward to real providers
   mock_mode: true
+
+sanitization:
+  enabled: true
+  ttl: 300  # Vault TTL in seconds (5 minutes)
 
 policies:
   - id: pii-detection

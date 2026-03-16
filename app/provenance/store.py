@@ -59,12 +59,16 @@ CREATE TABLE IF NOT EXISTS provenance (
     -- System fingerprint, model routing & log probabilities
     system_fingerprint TEXT DEFAULT '',
     model_routing TEXT DEFAULT '{}',
-    logprobs TEXT DEFAULT '{}'
+    logprobs TEXT DEFAULT '{}',
+    -- Tenant and sanitization
+    tenant_id TEXT DEFAULT '',
+    entities_masked TEXT DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_provenance_timestamp ON provenance(timestamp);
 CREATE INDEX IF NOT EXISTS idx_provenance_verdict ON provenance(overall_verdict);
 CREATE INDEX IF NOT EXISTS idx_provenance_caller ON provenance(caller_id);
 CREATE INDEX IF NOT EXISTS idx_provenance_model ON provenance(upstream_model);
+CREATE INDEX IF NOT EXISTS idx_provenance_tenant ON provenance(tenant_id);
 """
 
 # Migration to add new columns to existing databases
@@ -91,6 +95,8 @@ MIGRATIONS = [
     "ALTER TABLE provenance ADD COLUMN system_fingerprint TEXT DEFAULT ''",
     "ALTER TABLE provenance ADD COLUMN model_routing TEXT DEFAULT '{}'",
     "ALTER TABLE provenance ADD COLUMN logprobs TEXT DEFAULT '{}'",
+    "ALTER TABLE provenance ADD COLUMN tenant_id TEXT DEFAULT ''",
+    "ALTER TABLE provenance ADD COLUMN entities_masked TEXT DEFAULT '{}'",
 ]
 
 
@@ -137,10 +143,11 @@ class ProvenanceStore:
                     temperature, max_tokens, top_p, frequency_penalty, presence_penalty,
                     stop_sequences, tool_calls, functions_available, model_info,
                     finish_reason, request_ip, user_agent,
-                    system_fingerprint, model_routing, logprobs)
+                    system_fingerprint, model_routing, logprobs,
+                    tenant_id, entities_masked)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                           ?, ?, ?)""",
+                           ?, ?, ?, ?, ?)""",
                 (
                     entry.id, entry.timestamp, entry.session_id, entry.caller_id,
                     entry.upstream_model, entry.request_hash, entry.response_hash,
@@ -160,6 +167,8 @@ class ProvenanceStore:
                     entry.system_fingerprint,
                     json.dumps(entry.model_routing, default=str),
                     json.dumps(entry.logprobs, default=str),
+                    entry.tenant_id,
+                    json.dumps(entry.entities_masked, default=str),
                 ),
             )
             await db.commit()
@@ -170,7 +179,8 @@ class ProvenanceStore:
 
     async def get_entries(self, limit: int = 50, offset: int = 0,
                           verdict: str | None = None,
-                          caller_id: str | None = None) -> list[dict[str, Any]]:
+                          caller_id: str | None = None,
+                          tenant_id: str | None = None) -> list[dict[str, Any]]:
         query = "SELECT * FROM provenance"
         params: list[Any] = []
         conditions = []
@@ -181,6 +191,9 @@ class ProvenanceStore:
         if caller_id:
             conditions.append("caller_id = ?")
             params.append(caller_id)
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -278,7 +291,7 @@ class ProvenanceStore:
         # Parse JSON string fields back to Python objects
         for json_field in ("policy_verdicts", "stop_sequences", "tool_calls",
                            "functions_available", "model_info",
-                           "model_routing", "logprobs"):
+                           "model_routing", "logprobs", "entities_masked"):
             if isinstance(d.get(json_field), str):
                 try:
                     d[json_field] = json.loads(d[json_field])

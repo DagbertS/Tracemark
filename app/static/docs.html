@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tracemark — Developer Quickstart</title>
+<style>
+  :root {
+    --bg-primary: #0f1923;
+    --bg-secondary: #1a2736;
+    --bg-card: #1e2d3d;
+    --border: #2a3f52;
+    --text: #e0e8f0;
+    --text-muted: #8899aa;
+    --accent: #3ecfb4;
+    --accent-dim: rgba(62,207,180,0.15);
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --code-bg: #0d1520;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .container { max-width: 860px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Header */
+  .doc-header {
+    text-align: center;
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .doc-header h1 {
+    font-size: 2.2em;
+    background: linear-gradient(135deg, var(--accent), #2dd4bf);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .doc-header .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1em;
+  }
+  .doc-header .badge {
+    display: inline-block;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    margin-top: 12px;
+  }
+  .back-link {
+    display: inline-block;
+    color: var(--accent);
+    text-decoration: none;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+  }
+  .back-link:hover { text-decoration: underline; }
+
+  /* Sections */
+  .section { margin-bottom: 40px; }
+  .section h2 {
+    font-size: 1.5em;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section h3 {
+    font-size: 1.15em;
+    color: var(--text);
+    margin: 20px 0 8px;
+  }
+  .section p { color: var(--text-muted); margin-bottom: 12px; }
+
+  /* Steps */
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .step-number {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    color: var(--bg-primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1em;
+  }
+  .step-content h3 { margin-top: 4px; }
+  .step-content p { margin-top: 4px; }
+
+  /* Code blocks */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 0.88em;
+    line-height: 1.6;
+  }
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    color: var(--text);
+  }
+  .inline-code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--accent);
+  }
+  .kw { color: #c678dd; }  /* keywords */
+  .str { color: #98c379; }  /* strings */
+  .cm { color: #5c6370; }   /* comments */
+  .fn { color: #61afef; }   /* functions */
+  .var { color: #e06c75; }  /* variables */
+
+  /* Tab switcher */
+  .lang-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+  }
+  .lang-tab {
+    padding: 8px 20px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.9em;
+    border-radius: 6px 6px 0 0;
+    transition: all 0.2s;
+  }
+  .lang-tab.active {
+    background: var(--code-bg);
+    color: var(--accent);
+    border-color: var(--accent);
+    border-bottom: 1px solid var(--code-bg);
+    margin-bottom: -1px;
+    position: relative;
+    z-index: 1;
+  }
+  .lang-content { display: none; }
+  .lang-content.active { display: block; }
+  .lang-content pre {
+    margin-top: 0;
+    border-top-left-radius: 0;
+  }
+
+  /* Headers table */
+  .headers-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+  }
+  .headers-table th, .headers-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .headers-table th {
+    background: var(--bg-secondary);
+    color: var(--accent);
+    font-size: 0.85em;
+    text-transform: uppercase;
+  }
+  .headers-table td { color: var(--text-muted); font-size: 0.9em; }
+  .headers-table td:first-child { color: var(--accent); font-family: monospace; }
+
+  /* Callout */
+  .callout {
+    background: var(--accent-dim);
+    border-left: 4px solid var(--accent);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+  }
+  .callout p { color: var(--text); margin: 0; }
+  .callout.warning {
+    background: rgba(245,158,11,0.1);
+    border-left-color: var(--orange);
+  }
+
+  /* Provider cards */
+  .provider-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+  }
+  .provider-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .provider-card h4 { color: var(--accent); margin-bottom: 6px; }
+  .provider-card code { font-size: 0.85em; color: var(--orange); }
+  .provider-card p { font-size: 0.85em; }
+
+  /* Response section */
+  .response-headers { margin-top: 12px; }
+  .response-headers span {
+    display: inline-block;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85em;
+    margin: 4px 4px 4px 0;
+    color: var(--accent);
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 20px 16px; }
+    .doc-header h1 { font-size: 1.6em; }
+    .step { flex-direction: column; gap: 8px; }
+    .provider-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <a href="/" class="back-link">&larr; Back to Dashboard</a>
+
+  <div class="doc-header">
+    <h1>Tracemark Developer Quickstart</h1>
+    <p class="subtitle">Add AI governance to your app in under 5 minutes</p>
+    <span class="badge">v0.1.0-mvp</span>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="section">
+    <h2>How It Works</h2>
+    <p>Tracemark is a drop-in reverse proxy that sits between your application and your LLM provider. Change your <code class="inline-code">base_url</code> to point at Tracemark, add two identification headers, and every AI call is automatically governed.</p>
+
+    <div class="step">
+      <div class="step-number">1</div>
+      <div class="step-content">
+        <h3>Point your SDK at Tracemark</h3>
+        <p>Change the <code class="inline-code">base_url</code> in your existing OpenAI/Anthropic client to your Tracemark endpoint.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">2</div>
+      <div class="step-content">
+        <h3>Add caller identification</h3>
+        <p>Set <code class="inline-code">X-Tracemark-Caller</code> and <code class="inline-code">X-Tracemark-Tenant</code> headers to identify your app and organization.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-number">3</div>
+      <div class="step-content">
+        <h3>Send requests as normal</h3>
+        <p>Tracemark intercepts, applies policies (PII masking, topic blocklist, confidence checks), logs to the provenance trail, and forwards to the model.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Code Snippets -->
+  <div class="section">
+    <h2>Integration Snippets</h2>
+
+    <div class="lang-tabs">
+      <div class="lang-tab active" onclick="showLang('python')">Python</div>
+      <div class="lang-tab" onclick="showLang('node')">Node.js</div>
+      <div class="lang-tab" onclick="showLang('curl')">curl</div>
+    </div>
+
+    <div id="lang-python" class="lang-content active">
+<pre><code><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+client = OpenAI(
+    api_key=<span class="str">"your-openai-api-key"</span>,
+    base_url=<span class="str">"https://tracemark-production.up.railway.app/v1"</span>,
+    default_headers={
+        <span class="str">"X-Tracemark-Caller"</span>: <span class="str">"my-app-name"</span>,
+        <span class="str">"X-Tracemark-Tenant"</span>: <span class="str">"your-tenant-slug"</span>,
+    }
+)
+
+response = client.chat.completions.create(
+    model=<span class="str">"openai/gpt-4o"</span>,  <span class="cm"># prefix with provider</span>
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello"</span>}]
+)
+
+<span class="fn">print</span>(response.choices[0].message.content)</code></pre>
+    </div>
+
+    <div id="lang-node" class="lang-content">
+<pre><code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">'openai'</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+  apiKey: <span class="str">'your-openai-api-key'</span>,
+  baseURL: <span class="str">'https://tracemark-production.up.railway.app/v1'</span>,
+  defaultHeaders: {
+    <span class="str">'X-Tracemark-Caller'</span>: <span class="str">'my-app-name'</span>,
+    <span class="str">'X-Tracemark-Tenant'</span>: <span class="str">'your-tenant-slug'</span>,
+  },
+});
+
+<span class="kw">const</span> response = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+  model: <span class="str">'openai/gpt-4o'</span>,
+  messages: [{ role: <span class="str">'user'</span>, content: <span class="str">'Hello'</span> }],
+});
+
+console.<span class="fn">log</span>(response.choices[0].message.content);</code></pre>
+    </div>
+
+    <div id="lang-curl" class="lang-content">
+<pre><code>curl -X POST https://tracemark-production.up.railway.app/v1/chat/completions \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -H <span class="str">"Authorization: Bearer your-openai-api-key"</span> \
+  -H <span class="str">"X-Tracemark-Caller: my-app-name"</span> \
+  -H <span class="str">"X-Tracemark-Tenant: your-tenant-slug"</span> \
+  -d <span class="str">'{
+    "model": "openai/gpt-4o",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'</span></code></pre>
+    </div>
+  </div>
+
+  <!-- Anthropic Native -->
+  <div class="section">
+    <h2>Anthropic Native Format</h2>
+    <p>For applications using the Anthropic SDK, Tracemark also exposes the native <code class="inline-code">/v1/messages</code> endpoint:</p>
+<pre><code><span class="kw">import</span> anthropic
+
+client = anthropic.Anthropic(
+    api_key=<span class="str">"your-anthropic-key"</span>,
+    base_url=<span class="str">"https://tracemark-production.up.railway.app"</span>,
+)
+
+message = client.messages.create(
+    model=<span class="str">"claude-sonnet-4-6"</span>,
+    max_tokens=1024,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello"</span>}],
+    extra_headers={
+        <span class="str">"X-Tracemark-Caller"</span>: <span class="str">"my-app"</span>,
+        <span class="str">"X-Tracemark-Tenant"</span>: <span class="str">"your-tenant"</span>,
+    }
+)</code></pre>
+  </div>
+
+  <!-- Provider Routing -->
+  <div class="section">
+    <h2>Multi-Provider Routing</h2>
+    <p>Prefix your model name with the provider to route through Tracemark to any supported LLM:</p>
+    <div class="provider-grid">
+      <div class="provider-card">
+        <h4>OpenAI</h4>
+        <code>openai/gpt-4o</code><br>
+        <code>openai/gpt-4o-mini</code><br>
+        <p>Default if no prefix.</p>
+      </div>
+      <div class="provider-card">
+        <h4>Anthropic</h4>
+        <code>anthropic/claude-sonnet-4-6</code><br>
+        <code>anthropic/claude-haiku</code><br>
+        <p>Also via /v1/messages</p>
+      </div>
+      <div class="provider-card">
+        <h4>Google</h4>
+        <code>google/gemini-pro</code><br>
+        <code>google/gemini-1.5-flash</code><br>
+        <p>Via Gemini API</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Headers -->
+  <div class="section">
+    <h2>Headers Reference</h2>
+    <table class="headers-table">
+      <thead>
+        <tr><th>Header</th><th>Required</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>X-Tracemark-Caller</td>
+          <td>Recommended</td>
+          <td>Identifies your application (e.g., "billing-service", "chatbot-v2")</td>
+        </tr>
+        <tr>
+          <td>X-Tracemark-Tenant</td>
+          <td>Recommended</td>
+          <td>Identifies the organization/company slug (e.g., "acme-corp")</td>
+        </tr>
+        <tr>
+          <td>X-Tracemark-Session</td>
+          <td>Optional</td>
+          <td>Groups related requests into a session for analysis</td>
+        </tr>
+        <tr>
+          <td>Authorization</td>
+          <td>Yes</td>
+          <td>Your LLM provider API key (forwarded to upstream)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- What to Expect -->
+  <div class="section">
+    <h2>What to Expect</h2>
+    <p>After integrating, every AI call through Tracemark will:</p>
+
+    <div class="callout">
+      <p><strong>1. Scan for policy violations</strong> — PII (emails, phone numbers, credit cards, IBAN), forbidden topics, and confidence issues are detected automatically.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>2. Sanitize sensitive data</strong> — PII is replaced with stable tokens (e.g., <code class="inline-code">[EMAIL_a3f2]</code>) before reaching the model, then restored in the response.</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>3. Log to provenance trail</strong> — Every request gets an HMAC-SHA256 chained audit entry with full metadata (model, tokens, cost, policies applied).</p>
+    </div>
+
+    <div class="callout">
+      <p><strong>4. Fire connectors</strong> — Violations trigger Slack alerts, email notifications, or webhook calls to your enterprise systems.</p>
+    </div>
+
+    <h3>Response Headers</h3>
+    <p>Tracemark adds these headers to every response:</p>
+    <div class="response-headers">
+      <span>Tracemark-Entry-ID</span>
+      <span>Tracemark-Verdict</span>
+      <span>Tracemark-Entities-Masked</span>
+      <span>Tracemark-Remediation-Triggered</span>
+    </div>
+
+    <h3>Dashboard</h3>
+    <p>Open your <a href="/" style="color:var(--accent)">Tracemark Dashboard</a> to see live interceptions, policy enforcement, and chain integrity verification in real time.</p>
+  </div>
+
+  <!-- Try it -->
+  <div class="section">
+    <h2>Try It Now</h2>
+    <p>Send a test request with PII to see Tracemark in action:</p>
+<pre><code>curl -s -X POST https://tracemark-production.up.railway.app/v1/chat/completions \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -H <span class="str">"X-Tracemark-Caller: quickstart-test"</span> \
+  -H <span class="str">"X-Tracemark-Tenant: demo"</span> \
+  -d <span class="str">'{
+    "model": "gpt-4o",
+    "messages": [{
+      "role": "user",
+      "content": "Please help John Doe at j.doe@email.com with his refund"
+    }]
+  }'</span> | python3 -m json.tool</code></pre>
+
+    <div class="callout warning">
+      <p><strong>Expected result:</strong> The request will be blocked (PII detected: email, name). Check the Live Feed in the dashboard to see the entry with verdict=BLOCKED and the matched PII patterns.</p>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:32px 0;color:var(--text-muted);font-size:0.85em;border-top:1px solid var(--border);margin-top:40px;">
+    Tracemark v0.1.0-mvp &mdash; AI Governance Infrastructure<br>
+    <a href="/" style="color:var(--accent)">Dashboard</a>
+  </div>
+</div>
+
+<script>
+function showLang(lang) {
+  document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.lang-tab[onclick*="' + lang + '"]').classList.add('active');
+  document.getElementById('lang-' + lang).classList.add('active');
+}
+</script>
+</body>
+</html>

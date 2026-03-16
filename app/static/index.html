@@ -612,6 +612,7 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       <div class="nav-item" data-tab="remediation" onclick="switchTab('remediation')"><span>Remediation</span></div>
       <div class="nav-item" data-tab="chain" onclick="switchTab('chain')"><span>Chain Integrity</span></div>
       <div class="nav-item" data-tab="admin" onclick="switchTab('admin')"><span>⚙ Admin</span></div>
+      <a href="/docs/quickstart" target="_blank" class="nav-item" style="text-decoration:none;color:var(--accent);opacity:0.8;font-size:0.85em;margin-top:8px"><span>📖 Developer Docs</span></a>
     </div>
     <div class="sidebar-section-title">Active Policies</div>
     <div id="sidebarPolicies"></div>
@@ -739,6 +740,42 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
           <thead><tr><th>SAGA ID</th><th>Action Type</th><th>Compensating Action</th><th>Status</th><th>Timestamp</th></tr></thead>
           <tbody id="sagaTable"></tbody>
         </table>
+      </div>
+
+      <!-- Enterprise Connectors Section -->
+      <div class="section-title" style="margin-top:28px">Enterprise Connectors</div>
+      <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:12px">Configure Slack, Email, and Webhook integrations to fire on policy violations.</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="showConnectorModal()">+ Add Connector</button>
+        <button class="btn-secondary" onclick="loadConnectors()" style="background:var(--bg-secondary);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:6px;cursor:pointer">↻ Refresh</button>
+      </div>
+      <div id="connectorsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+
+      <!-- Connector Modal -->
+      <div id="connectorModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center">
+        <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h3 style="color:var(--accent)">Add Connector</h3>
+            <span onclick="hideConnectorModal()" style="cursor:pointer;color:var(--text-muted);font-size:1.3em">&times;</span>
+          </div>
+          <label style="display:block;margin-bottom:12px">
+            <span style="color:var(--text-muted);font-size:0.85em">Type</span>
+            <select id="connType" onchange="updateConnForm()" style="display:block;width:100%;margin-top:4px;padding:8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);border-radius:6px">
+              <option value="slack">Slack Webhook</option>
+              <option value="email">Email (SMTP)</option>
+              <option value="webhook">Generic HTTP Webhook</option>
+            </select>
+          </label>
+          <label style="display:block;margin-bottom:12px">
+            <span style="color:var(--text-muted);font-size:0.85em">Name</span>
+            <input id="connName" type="text" placeholder="e.g. Production Alerts" style="display:block;width:100%;margin-top:4px;padding:8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);border-radius:6px">
+          </label>
+          <div id="connConfigFields"></div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn-primary" onclick="createConnector()">Create</button>
+            <button onclick="hideConnectorModal()" style="background:var(--bg-primary);border:1px solid var(--border);color:var(--text);padding:8px 16px;border-radius:6px;cursor:pointer">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1607,6 +1644,8 @@ async function loadRemediation() {
       '<td><span class="badge ' + badgeClass(s.status === 'COMPLETED' ? 'PASS' : s.status === 'FAILED' ? 'BLOCKED' : 'WARNING') + '">' + s.status + '</span></td>' +
       '<td>' + fmtDate(s.timestamp) + '</td></tr>'
     ).join('');
+    // Also load connectors
+    loadConnectors();
   } catch (err) {
     console.error('Remediation load error:', err);
   }
@@ -1632,6 +1671,89 @@ async function triggerRemediation() {
   } catch (err) {
     document.getElementById('remResult').innerHTML = '<div class="card violation"><div class="card-header">Error</div><div class="card-subtext">' + escHtml(err.message) + '</div></div>';
   }
+}
+
+// ── ENTERPRISE CONNECTORS ──
+async function loadConnectors() {
+  try {
+    const resp = await fetch('/api/connectors');
+    const data = await resp.json();
+    const container = document.getElementById('connectorsList');
+    if (!data.connectors || data.connectors.length === 0) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:0.9em;padding:16px;text-align:center;grid-column:1/-1">No connectors configured. Click "+ Add Connector" to set up Slack, Email, or Webhook integrations.</div>';
+      return;
+    }
+    container.innerHTML = data.connectors.map(c => `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <strong style="color:var(--accent)">${c.name || c.type}</strong>
+          <span style="background:${c.status==='active'?'rgba(62,207,180,0.15)':'rgba(239,68,68,0.15)'};color:${c.status==='active'?'var(--accent)':'#ef4444'};padding:2px 8px;border-radius:10px;font-size:0.75em">${c.status}</span>
+        </div>
+        <div style="color:var(--text-muted);font-size:0.8em;margin-bottom:8px">Type: ${c.type} | Tenant: ${c.tenant_id}</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="testConnector('${c.id}')" style="background:var(--bg-secondary);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.8em">Test</button>
+          <button onclick="deleteConnector('${c.id}')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:0.8em">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) { console.error('Failed to load connectors:', e); }
+}
+
+function showConnectorModal() {
+  document.getElementById('connectorModal').style.display = 'flex';
+  updateConnForm();
+}
+function hideConnectorModal() {
+  document.getElementById('connectorModal').style.display = 'none';
+}
+
+function updateConnForm() {
+  const type = document.getElementById('connType').value;
+  const fields = document.getElementById('connConfigFields');
+  const mkField = (id, label, placeholder, type='text') =>
+    `<label style="display:block;margin-bottom:10px"><span style="color:var(--text-muted);font-size:0.85em">${label}</span><input id="${id}" type="${type}" placeholder="${placeholder}" style="display:block;width:100%;margin-top:4px;padding:8px;background:var(--bg-primary);border:1px solid var(--border);color:var(--text);border-radius:6px"></label>`;
+
+  if (type === 'slack') {
+    fields.innerHTML = mkField('connWebhookUrl', 'Webhook URL', 'https://hooks.slack.com/services/...') + mkField('connChannel', 'Channel', '#tracemark-alerts');
+  } else if (type === 'email') {
+    fields.innerHTML = mkField('connSmtpHost', 'SMTP Host', 'smtp.gmail.com') + mkField('connSmtpPort', 'SMTP Port', '587') + mkField('connFromAddr', 'From Address', 'alerts@company.com') + mkField('connToAddr', 'To Address', 'compliance@company.com');
+  } else {
+    fields.innerHTML = mkField('connWebhookUrl', 'Webhook URL', 'https://api.example.com/webhook') + mkField('connMethod', 'Method', 'POST');
+  }
+}
+
+async function createConnector() {
+  const type = document.getElementById('connType').value;
+  const name = document.getElementById('connName').value || type + ' connector';
+  let config = {};
+  if (type === 'slack') {
+    config = { webhook_url: document.getElementById('connWebhookUrl').value, channel: document.getElementById('connChannel').value || '#tracemark-alerts' };
+  } else if (type === 'email') {
+    config = { smtp_host: document.getElementById('connSmtpHost').value, smtp_port: parseInt(document.getElementById('connSmtpPort').value || '587'), from_address: document.getElementById('connFromAddr').value, to_address: document.getElementById('connToAddr').value };
+  } else {
+    config = { url: document.getElementById('connWebhookUrl').value, method: document.getElementById('connMethod').value || 'POST' };
+  }
+  try {
+    const resp = await fetch('/api/connectors', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ tenant_id: 'comp-acme', type, name, config }) });
+    const data = await resp.json();
+    if (data.status === 'created') { hideConnectorModal(); loadConnectors(); } else { alert('Error: ' + (data.error || JSON.stringify(data))); }
+  } catch (e) { alert('Failed to create connector: ' + e); }
+}
+
+async function testConnector(id) {
+  try {
+    const resp = await fetch('/api/connectors/' + id + '/test', { method: 'POST' });
+    const data = await resp.json();
+    alert(data.success ? 'Connection successful!' : 'Connection failed: ' + data.message);
+  } catch (e) { alert('Test failed: ' + e); }
+}
+
+async function deleteConnector(id) {
+  if (!confirm('Delete this connector?')) return;
+  try {
+    await fetch('/api/connectors/' + id, { method: 'DELETE' });
+    loadConnectors();
+  } catch (e) { alert('Delete failed: ' + e); }
 }
 
 // ── CHAIN INTEGRITY ──

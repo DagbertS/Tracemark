@@ -134,6 +134,10 @@ class ProvenanceEntry:
     system_fingerprint: str = ""
     model_routing: dict[str, Any] = field(default_factory=dict)
     logprobs: dict[str, Any] = field(default_factory=dict)
+    # Tenant identification
+    tenant_id: str = ""
+    # Sanitization stats (entity types masked, never actual values)
+    entities_masked: dict[str, Any] = field(default_factory=dict)
 
     def compute_entry_hash(self, secret_key: str) -> str:
         """Compute HMAC-SHA256 over all fields to create a tamper-evident hash.
@@ -203,6 +207,8 @@ class ProvenanceEntry:
             "system_fingerprint": self.system_fingerprint,
             "model_routing": self.model_routing,
             "logprobs": self.logprobs,
+            "tenant_id": self.tenant_id,
+            "entities_masked": self.entities_masked,
         }
 
     @classmethod
