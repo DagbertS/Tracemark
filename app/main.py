@@ -25,6 +25,11 @@ from .remediation import SAGAOrchestrator, ActionRegistry
 from .remediation.actions.email_action import retract_email
 from .remediation.actions.crm_action import restore_crm_record
 from .remediation.actions.notify_action import send_compliance_override
+from .remediation.actions.api_action import revoke_api_call
+from .remediation.actions.document_action import revoke_document_access
+from .remediation.actions.database_action import rollback_database_change
+from .remediation.actions.ticket_action import void_ticket
+from .remediation.actions.permission_action import revert_permission_change
 from .sanitization import SanitizationEngine, VaultStore
 from .connectors.registry import ConnectorRegistry
 
@@ -49,6 +54,11 @@ def build_action_registry(config: dict) -> ActionRegistry:
         "retract_email": retract_email,
         "restore_crm_record": restore_crm_record,
         "send_compliance_override": send_compliance_override,
+        "revoke_api_call": revoke_api_call,
+        "revoke_document_access": revoke_document_access,
+        "rollback_database_change": rollback_database_change,
+        "void_ticket": void_ticket,
+        "revert_permission_change": revert_permission_change,
     }
     for action_type, action_cfg in config.get("action_registry", {}).items():
         comp_name = action_cfg.get("compensating_action")

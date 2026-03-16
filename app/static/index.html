@@ -522,6 +522,7 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
   .stat-number { font-size: 20px; }
   .stat-tile { padding: 10px 12px; }
   .rem-panels { grid-template-columns: 1fr; }
+  .rem-trigger-grid { grid-template-columns: 1fr !important; }
   .policy-grid { grid-template-columns: 1fr; }
   .table-container { font-size: 11px; }
   .table-container th, .table-container td { padding: 6px 8px; }
@@ -727,50 +728,89 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 
     <!-- REMEDIATION TAB -->
     <div id="tab-remediation" class="tab-content hidden">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div class="section-title" style="margin-bottom:0">Remediation Actions</div>
-        <button class="btn-primary" onclick="autoGenerateRemediations()">⚡ Auto-Generate from Warnings</button>
+      <!-- Header row -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div class="section-title" style="margin-bottom:0">Remediation Center</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-secondary" onclick="autoGenerateRemediations()">⚡ Auto-Generate from Warnings</button>
+        </div>
       </div>
+
+      <!-- Manual Trigger — full width banner at top -->
+      <div class="card" style="margin-bottom:20px;border:1px solid rgba(62,207,180,0.25);background:linear-gradient(135deg,rgba(26,46,64,0.95),rgba(13,25,38,0.95))">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:14px;font-weight:700;color:var(--teal-primary)">⚡ Manual Trigger</div>
+          <div style="font-size:11px;color:var(--text-muted)">Execute a compensating action to undo an AI-initiated side-effect</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 2fr 1fr auto;gap:12px;align-items:end">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Action Type</label>
+            <select class="form-select" id="remActionType" onchange="updateRemContextHint()"></select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Context (JSON)</label>
+            <input class="form-input" id="remContext" value='{"recipient": "customer@example.com", "subject": "Special offer"}' style="font-family:var(--mono);font-size:11px">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Reason</label>
+            <input class="form-input" id="remReason" value="Manual remediation triggered">
+          </div>
+          <button class="btn-primary" style="white-space:nowrap;height:36px" onclick="triggerRemediation()">Execute</button>
+        </div>
+        <div id="remResult" style="margin-top:8px"></div>
+      </div>
+
+      <!-- Two-panel layout -->
       <div class="rem-panels">
+        <!-- LEFT: Action Registry -->
         <div>
-          <div class="section-title">Action Registry</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="section-title" style="margin-bottom:0">Action Registry</div>
+            <span style="font-size:11px;color:var(--text-muted)" id="registryCount"></span>
+          </div>
           <div id="registryList"></div>
         </div>
+
+        <!-- RIGHT: Defined Remediation Procedures -->
         <div>
-          <div class="section-title">Trigger Remediation</div>
-          <div class="card">
-            <div class="form-group">
-              <label class="form-label">Action Type</label>
-              <select class="form-select" id="remActionType"></select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Context (JSON)</label>
-              <textarea class="form-textarea" id="remContext">{"recipient": "customer@example.com", "subject": "Special offer"}</textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Reason</label>
-              <input class="form-input" id="remReason" value="Manual remediation triggered">
-            </div>
-            <button class="btn-primary" onclick="triggerRemediation()">Execute Compensating Action</button>
-            <div id="remResult"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="section-title" style="margin-bottom:0">Remediation Procedures</div>
+            <span style="font-size:11px;color:var(--text-muted)" id="remProcCount"></span>
           </div>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <input class="prov-search" id="remProcSearch" placeholder="Search procedures..." oninput="filterRemProcedures()" style="flex:1;min-width:140px;font-size:12px">
+            <select class="prov-filter-select" id="remProcFilter" onchange="filterRemProcedures()" style="font-size:12px">
+              <option value="">All</option>
+              <option value="defined">Defined</option>
+              <option value="undefined">Not Defined</option>
+              <option value="compliance">Compliance Required</option>
+            </select>
+          </div>
+          <div id="remProcList"></div>
         </div>
       </div>
-      <div class="section-title">SAGA Execution Log</div>
+
+      <!-- SAGA Execution Log -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">SAGA Execution Log</div>
+        <span style="font-size:11px;color:var(--text-muted)" id="sagaCount"></span>
+      </div>
       <div class="table-container">
         <table>
-          <thead><tr><th>SAGA ID</th><th>Action Type</th><th>Compensating Action</th><th>Status</th><th>Timestamp</th></tr></thead>
+          <thead><tr><th>SAGA ID</th><th>Action Type</th><th>Compensating Action</th><th>Status</th><th>Reason</th><th>Timestamp</th></tr></thead>
           <tbody id="sagaTable"></tbody>
         </table>
       </div>
 
       <!-- Enterprise Connectors Section -->
-      <div class="section-title" style="margin-top:28px">Enterprise Connectors</div>
-      <p style="color:var(--text-muted);font-size:0.85em;margin-bottom:12px">Configure Slack, Email, and Webhook integrations to fire on policy violations.</p>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <button class="btn-primary" onclick="showConnectorModal()">+ Add Connector</button>
-        <button class="btn-secondary" onclick="loadConnectors()" style="background:var(--bg-secondary);border:1px solid var(--border);color:var(--text);padding:6px 14px;border-radius:6px;cursor:pointer">↻ Refresh</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:28px;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">Enterprise Connectors</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-primary" onclick="showConnectorModal()" style="font-size:12px;padding:6px 12px">+ Add Connector</button>
+          <button class="btn-secondary" onclick="loadConnectors()" style="font-size:12px;padding:6px 12px">↻ Refresh</button>
+        </div>
       </div>
+      <p style="color:var(--text-muted);font-size:0.8em;margin-bottom:12px">Configure Slack, Email, and Webhook integrations to fire automatically on policy violations.</p>
       <div id="connectorsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
 
       <!-- Connector Modal -->
@@ -955,6 +995,17 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
     </div>
     <div id="autoGenLoading" style="text-align:center;padding:20px;color:var(--text-muted)">Analyzing warning entries...</div>
     <div id="autoGenResult"></div>
+  </div>
+</div>
+
+<!-- REMEDIATION DETAIL MODAL -->
+<div class="modal-overlay" id="remDetailModal">
+  <div class="modal modal-left" style="max-width:800px;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:0" id="remDetailTitle">Remediation Procedures</div>
+      <button style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer" onclick="closeRemDetailModal()">&times;</button>
+    </div>
+    <div id="remDetailContent"></div>
   </div>
 </div>
 
@@ -1667,61 +1718,210 @@ async function loadPendingPolicies() {
 }
 
 // ── REMEDIATION ──
+let _allRegistryActions = [];
+
+// Icon map for action types
+const ACTION_ICONS = {
+  'EMAIL_SENT': '📧', 'CRM_UPDATED': '🗂', 'NOTIFICATION_SENT': '🔔',
+  'API_CALL_MADE': '🔌', 'DOCUMENT_SHARED': '📄', 'DATABASE_MODIFIED': '🗃',
+  'TICKET_CREATED': '🎫', 'PERMISSION_CHANGED': '🔐'
+};
+
+// Context hints per action type
+const CONTEXT_HINTS = {
+  'EMAIL_SENT': '{"recipient": "user@example.com", "subject": "Special offer"}',
+  'CRM_UPDATED': '{"record_id": "CRM-4821", "field_name": "contact_preferences", "previous_value": "email-only"}',
+  'NOTIFICATION_SENT': '{"notification_type": "policy_violation_alert", "recipient": "compliance-team"}',
+  'API_CALL_MADE': '{"endpoint": "/api/v1/orders", "method": "POST", "request_id": "req-001"}',
+  'DOCUMENT_SHARED': '{"document_id": "DOC-2291", "shared_with": "external-partner", "platform": "sharepoint"}',
+  'DATABASE_MODIFIED': '{"table": "customers", "record_id": "cust-5512", "operation": "UPDATE", "previous_state": {}}',
+  'TICKET_CREATED': '{"ticket_id": "TKT-8834", "system": "jira", "assigned_to": "support-team"}',
+  'PERMISSION_CHANGED': '{"user_id": "user-0042", "resource": "admin-dashboard", "previous_role": "viewer", "changed_to": "editor"}'
+};
+
+function updateRemContextHint() {
+  const type = document.getElementById('remActionType').value;
+  if (CONTEXT_HINTS[type]) document.getElementById('remContext').value = CONTEXT_HINTS[type];
+}
+
 async function loadRemediation() {
   try {
     const [registry, log] = await Promise.all([
       fetch(API + '/api/remediation/registry').then(r => r.json()),
       fetch(API + '/api/remediation/log').then(r => r.json()),
     ]);
+    _allRegistryActions = registry;
 
+    const definedCount = registry.filter(a => a.remediation_text && a.remediation_text.trim()).length;
+
+    // ── Action Registry (left panel) ──
+    document.getElementById('registryCount').textContent = registry.length + ' actions registered';
     document.getElementById('registryList').innerHTML = registry.map(a => {
       const hasText = a.remediation_text && a.remediation_text.trim();
-      const preview = hasText ? '<div class="rem-text-preview">' + a.remediation_text + '</div>' : '<div style="margin-top:6px;font-size:11px;color:var(--text-muted);font-style:italic">No remediation procedure defined yet</div>';
-      return '<div class="card"><div class="card-header">' + escHtml(a.action_type) + '</div>' +
-      '<div class="card-subtext">' + escHtml(a.description) + '</div>' +
-      '<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Notify compliance: ' + (a.notify_compliance ? '<span style="color:var(--teal-primary)">Yes</span>' : 'No') + '</div>' +
-      preview +
-      '<div style="margin-top:8px"><button class="btn-secondary" onclick="openWysiwygEditor(\'/api/remediation/registry/' + encodeURIComponent(a.action_type) + '/text\', ' + escAttr(a.remediation_text || '') + ', \'Edit Remediation: ' + escHtml(a.action_type) + '\')">✏ Edit Remediation</button></div></div>';
+      const icon = ACTION_ICONS[a.action_type] || '⚙';
+      const statusDot = hasText
+        ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--teal-primary);margin-right:6px" title="Procedure defined"></span>'
+        : '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;margin-right:6px" title="No procedure defined"></span>';
+      return '<div class="card" style="margin-bottom:8px;padding:12px;cursor:pointer;transition:border-color .2s" onclick="openRemDetail(\'' + escHtml(a.action_type) + '\')" onmouseover="this.style.borderColor=\'var(--teal-primary)\'" onmouseout="this.style.borderColor=\'var(--border-subtle)\'">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span style="font-size:18px">' + icon + '</span>' +
+        '<div>' +
+        '<div style="font-weight:600;font-size:13px">' + statusDot + escHtml(a.action_type) + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' + escHtml(a.description) + '</div>' +
+        '</div></div>' +
+        '<div style="text-align:right">' +
+        (a.notify_compliance ? '<span style="font-size:10px;background:rgba(245,158,11,0.15);color:var(--amber-accent);padding:2px 6px;border-radius:8px">Compliance</span>' : '') +
+        '<div style="font-size:10px;color:' + (hasText ? 'var(--teal-primary)' : '#ef4444') + ';margin-top:4px;font-weight:600">' + (hasText ? '✓ Defined' : '✗ Undefined') + '</div>' +
+        '</div></div></div>';
     }).join('');
 
-    const select = document.getElementById('remActionType');
-    select.innerHTML = registry.map(a => '<option value="' + a.action_type + '">' + a.action_type + '</option>').join('');
+    // ── Remediation Procedures (right panel) ──
+    document.getElementById('remProcCount').textContent = definedCount + ' of ' + registry.length + ' defined';
+    renderRemProcedures(registry);
 
+    // ── Action type dropdown ──
+    const select = document.getElementById('remActionType');
+    select.innerHTML = registry.map(a => {
+      const icon = ACTION_ICONS[a.action_type] || '⚙';
+      return '<option value="' + a.action_type + '">' + icon + ' ' + a.action_type + '</option>';
+    }).join('');
+
+    // ── SAGA Log ──
     const tbody = document.getElementById('sagaTable');
-    tbody.innerHTML = log.map(s =>
+    document.getElementById('sagaCount').textContent = log.length + ' executions';
+    tbody.innerHTML = log.length ? log.map(s =>
       '<tr><td class="mono">' + truncId(s.saga_id) + '</td>' +
-      '<td>' + escHtml(s.action_type) + '</td>' +
+      '<td>' + (ACTION_ICONS[s.action_type] || '⚙') + ' ' + escHtml(s.action_type) + '</td>' +
       '<td>' + escHtml(s.compensating_action || 'N/A') + '</td>' +
       '<td><span class="badge ' + badgeClass(s.status === 'COMPLETED' ? 'PASS' : s.status === 'FAILED' ? 'BLOCKED' : 'WARNING') + '">' + s.status + '</span></td>' +
+      '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="' + escHtml(s.reason || '') + '">' + escHtml(s.reason || '-') + '</td>' +
       '<td>' + fmtDate(s.timestamp) + '</td></tr>'
-    ).join('');
-    // Also load connectors
+    ).join('') : '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:20px">No compensating actions executed yet. Use the manual trigger above to execute one.</td></tr>';
+
     loadConnectors();
   } catch (err) {
     console.error('Remediation load error:', err);
   }
 }
 
+function renderRemProcedures(registry) {
+  const list = document.getElementById('remProcList');
+  if (!registry.length) {
+    list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">No actions registered</div>';
+    return;
+  }
+  list.innerHTML = registry.map(a => {
+    const hasText = a.remediation_text && a.remediation_text.trim();
+    const icon = ACTION_ICONS[a.action_type] || '⚙';
+    if (hasText) {
+      return '<div class="card" style="margin-bottom:8px;padding:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<span style="font-weight:600;font-size:12px">' + icon + ' ' + escHtml(a.action_type) + '</span>' +
+        '<button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="openWysiwygEditor(\'/api/remediation/registry/' + encodeURIComponent(a.action_type) + '/text\', ' + escAttr(a.remediation_text || '') + ', \'Edit: ' + escHtml(a.action_type) + '\')">✏ Edit</button>' +
+        '</div>' +
+        '<div class="rem-text-preview" style="max-height:80px">' + a.remediation_text + '</div></div>';
+    }
+    return '<div class="card" style="margin-bottom:8px;padding:12px;border:1px dashed rgba(239,68,68,0.3)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="font-weight:600;font-size:12px;color:var(--text-muted)">' + icon + ' ' + escHtml(a.action_type) + '</span>' +
+      '<button class="btn-primary" style="font-size:10px;padding:3px 8px" onclick="openWysiwygEditor(\'/api/remediation/registry/' + encodeURIComponent(a.action_type) + '/text\', \'\', \'Define: ' + escHtml(a.action_type) + '\')">+ Define Procedure</button>' +
+      '</div>' +
+      '<div style="font-size:11px;color:#ef4444;margin-top:4px">⚠ No remediation procedure defined — this action cannot be properly reversed</div></div>';
+  }).join('');
+}
+
+function filterRemProcedures() {
+  const query = (document.getElementById('remProcSearch').value || '').toLowerCase();
+  const filter = document.getElementById('remProcFilter').value;
+  let filtered = _allRegistryActions.filter(a => {
+    if (query && !a.action_type.toLowerCase().includes(query) && !a.description.toLowerCase().includes(query)) return false;
+    const hasText = a.remediation_text && a.remediation_text.trim();
+    if (filter === 'defined' && !hasText) return false;
+    if (filter === 'undefined' && hasText) return false;
+    if (filter === 'compliance' && !a.notify_compliance) return false;
+    return true;
+  });
+  renderRemProcedures(filtered);
+}
+
+function openRemDetail(actionType) {
+  const modal = document.getElementById('remDetailModal');
+  document.getElementById('remDetailTitle').textContent = 'All Remediation Procedures';
+
+  let html = _allRegistryActions.map(a => {
+    const hasText = a.remediation_text && a.remediation_text.trim();
+    const icon = ACTION_ICONS[a.action_type] || '⚙';
+    const isHighlighted = a.action_type === actionType;
+    const borderStyle = isHighlighted ? 'border:2px solid var(--teal-primary);box-shadow:0 0 12px rgba(62,207,180,0.2)' : 'border:1px solid var(--border-subtle)';
+    return '<div id="remDetail-' + a.action_type + '" class="card" style="margin-bottom:12px;padding:16px;' + borderStyle + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:22px">' + icon + '</span>' +
+      '<div>' +
+      '<div style="font-size:14px;font-weight:700">' + escHtml(a.action_type) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted)">' + escHtml(a.description) + '</div>' +
+      '</div></div>' +
+      '<div style="display:flex;gap:6px;align-items:center">' +
+      (a.notify_compliance ? '<span style="font-size:11px;background:rgba(245,158,11,0.15);color:var(--amber-accent);padding:3px 8px;border-radius:8px">🔔 Compliance</span>' : '') +
+      '<span style="font-size:11px;background:' + (hasText ? 'rgba(62,207,180,0.15)' : 'rgba(239,68,68,0.15)') + ';color:' + (hasText ? 'var(--teal-primary)' : '#ef4444') + ';padding:3px 8px;border-radius:8px;font-weight:600">' + (hasText ? '✓ Defined' : '✗ Undefined') + '</span>' +
+      '</div></div>' +
+      (hasText
+        ? '<div class="rem-text-preview" style="max-height:none;margin-bottom:8px">' + a.remediation_text + '</div>'
+        : '<div style="padding:16px;text-align:center;border:1px dashed rgba(239,68,68,0.3);border-radius:6px;margin-bottom:8px"><span style="color:#ef4444;font-size:12px">No procedure defined yet</span></div>') +
+      '<div style="display:flex;gap:6px">' +
+      '<button class="btn-secondary" style="font-size:11px" onclick="closeRemDetailModal();openWysiwygEditor(\'/api/remediation/registry/' + encodeURIComponent(a.action_type) + '/text\', ' + escAttr(a.remediation_text || '') + ', \'' + (hasText ? 'Edit' : 'Define') + ': ' + escHtml(a.action_type) + '\')">' + (hasText ? '✏ Edit Procedure' : '+ Define Procedure') + '</button>' +
+      '</div></div>';
+  }).join('');
+
+  document.getElementById('remDetailContent').innerHTML = html;
+  modal.classList.add('open');
+
+  // Scroll the highlighted card into view
+  setTimeout(function() {
+    const el = document.getElementById('remDetail-' + actionType);
+    if (el) el.scrollIntoView({behavior: 'smooth', block: 'center'});
+  }, 100);
+}
+
+function closeRemDetailModal() {
+  document.getElementById('remDetailModal').classList.remove('open');
+}
+
 async function triggerRemediation() {
+  const btn = event.target;
+  const origText = btn.textContent;
+  btn.textContent = 'Executing...';
+  btn.disabled = true;
   try {
+    const contextVal = document.getElementById('remContext').value;
+    let context;
+    try { context = JSON.parse(contextVal); } catch(e) {
+      document.getElementById('remResult').innerHTML = '<div style="color:#ef4444;font-size:12px;margin-top:4px">Invalid JSON in context field</div>';
+      btn.textContent = origText; btn.disabled = false; return;
+    }
     const res = await fetch(API + '/api/remediate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action_type: document.getElementById('remActionType').value,
-        context: JSON.parse(document.getElementById('remContext').value),
+        context: context,
         reason: document.getElementById('remReason').value,
       }),
     });
     const data = await res.json();
     document.getElementById('remResult').innerHTML =
-      '<div class="card result-card ' + (data.status === 'COMPLETED' ? '' : 'violation') + '">' +
-      '<div class="card-header">SAGA Result: <span class="badge ' + badgeClass(data.status === 'COMPLETED' ? 'PASS' : 'BLOCKED') + '">' + data.status + '</span></div>' +
-      '<pre>' + syntaxHighlight(JSON.stringify(data, null, 2)) + '</pre></div>';
+      '<div class="card result-card ' + (data.status === 'COMPLETED' ? '' : 'violation') + '" style="margin-top:8px;padding:10px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      '<span style="font-weight:600;font-size:12px">SAGA ' + truncId(data.saga_id || '') + '</span>' +
+      '<span class="badge ' + badgeClass(data.status === 'COMPLETED' ? 'PASS' : 'BLOCKED') + '">' + data.status + '</span></div>' +
+      '<pre style="margin-top:6px;font-size:11px;max-height:120px;overflow:auto">' + syntaxHighlight(JSON.stringify(data, null, 2)) + '</pre></div>';
     loadRemediation();
   } catch (err) {
-    document.getElementById('remResult').innerHTML = '<div class="card violation"><div class="card-header">Error</div><div class="card-subtext">' + escHtml(err.message) + '</div></div>';
+    document.getElementById('remResult').innerHTML = '<div style="color:#ef4444;font-size:12px;margin-top:4px">Error: ' + escHtml(err.message) + '</div>';
   }
+  btn.textContent = origText;
+  btn.disabled = false;
 }
 
 // ── ENTERPRISE CONNECTORS ──

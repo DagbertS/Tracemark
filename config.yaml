@@ -57,14 +57,34 @@ policies:
 
 action_registry:
   EMAIL_SENT:
-    description: 'AI-generated email sent to customer'
+    description: 'AI-generated email sent to external recipient'
     compensating_action: retract_email
     notify_compliance: true
   CRM_UPDATED:
-    description: 'AI updated a CRM record'
+    description: 'AI modified a CRM record field'
     compensating_action: restore_crm_record
     notify_compliance: false
   NOTIFICATION_SENT:
-    description: 'AI sent internal notification'
+    description: 'AI sent internal notification or alert'
     compensating_action: send_compliance_override
+    notify_compliance: true
+  API_CALL_MADE:
+    description: 'AI initiated an external API call'
+    compensating_action: revoke_api_call
+    notify_compliance: true
+  DOCUMENT_SHARED:
+    description: 'AI shared or published a document externally'
+    compensating_action: revoke_document_access
+    notify_compliance: true
+  DATABASE_MODIFIED:
+    description: 'AI wrote or altered a database record'
+    compensating_action: rollback_database_change
+    notify_compliance: false
+  TICKET_CREATED:
+    description: 'AI created a support or issue ticket'
+    compensating_action: void_ticket
+    notify_compliance: false
+  PERMISSION_CHANGED:
+    description: 'AI modified user roles or access permissions'
+    compensating_action: revert_permission_change
     notify_compliance: true
