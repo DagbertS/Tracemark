@@ -484,6 +484,16 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 .consumption-fill { height: 100%; border-radius: 4px; transition: width 300ms ease; }
 .soc-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; background: rgba(0,198,184,0.1); border: 1px solid var(--teal-primary); color: var(--teal-primary); }
 
+/* Tracemark Admin button */
+.btn-tm-admin {
+  background: linear-gradient(135deg, var(--teal-dark), #005f5f);
+  color: white; font-family: inherit; font-size: 11px; font-weight: 700;
+  border: 1px solid var(--teal-primary); border-radius: 4px;
+  padding: 6px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em;
+  transition: all 150ms;
+}
+.btn-tm-admin:hover { background: var(--teal-primary); color: var(--bg-dark-navy); }
+
 /* Hamburger for mobile */
 .hamburger { display: none; background: none; border: none; color: var(--text-primary); font-size: 24px; cursor: pointer; padding: 4px 8px; }
 
@@ -587,6 +597,7 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       <span class="live-text">LIVE</span>
     </div>
     <span class="version">v0.1-mvp</span>
+    <button class="btn-tm-admin" onclick="switchTab('platform-admin')">Tracemark Admin</button>
   </div>
 </header>
 
@@ -752,29 +763,26 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
       </div>
     </div>
 
-    <!-- ADMIN TAB -->
+    <!-- CLIENT ADMIN TAB -->
     <div id="tab-admin" class="tab-content hidden">
-      <!-- Dashboard Stats -->
-      <div class="admin-grid" id="adminDashGrid"></div>
+      <div id="clientAdminContent"></div>
+    </div>
 
-      <!-- Company list + detail split -->
-      <div style="display:grid;grid-template-columns:320px 1fr;gap:16px" id="adminSplitLayout">
-        <!-- Left: company list -->
-        <div>
-          <div class="section-title-row">
-            <div class="section-title" style="margin-bottom:0">Companies</div>
-            <button class="btn-primary" onclick="openCreateCompany()" style="font-size:11px;padding:6px 12px">+ New</button>
-          </div>
-          <div id="companyList"></div>
-        </div>
-        <!-- Right: detail panel -->
-        <div class="admin-detail-panel" id="adminDetailPanel">
-          <div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
-            <div style="font-size:36px;margin-bottom:12px">🏢</div>
-            <div style="font-size:14px">Select a company to manage</div>
-          </div>
+    <!-- PLATFORM ADMIN TAB (Tracemark Admin) -->
+    <div id="tab-platform-admin" class="tab-content hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div class="section-title" style="margin-bottom:0">Tracemark Platform Admin</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select class="prov-filter-select" id="platformFilterRegion" onchange="loadPlatformAdmin()"><option value="">All Regions</option></select>
+          <select class="prov-filter-select" id="platformFilterCohort" onchange="loadPlatformAdmin()"><option value="">All Cohorts</option></select>
+          <select class="prov-filter-select" id="platformFilterStatus" onchange="loadPlatformAdmin()"><option value="">All Status</option><option value="active">Active</option><option value="suspended">Suspended</option></select>
         </div>
       </div>
+      <div class="admin-grid" id="platformDashGrid"></div>
+      <div class="section-title" style="margin-top:8px">All Clients</div>
+      <div id="platformClientList"></div>
+      <!-- Expandable client detail -->
+      <div id="platformClientDetail" class="admin-detail-panel" style="margin-top:16px;display:none"></div>
     </div>
 
   </main>
@@ -947,14 +955,16 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
   document.getElementById('tab-' + tab).classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
-  const titles = { feed: 'Live Feed', provenance: 'Provenance Log', policies: 'Policy Enforcement', remediation: 'Remediation', chain: 'Chain Integrity', admin: 'Admin Console' };
+  const navItem = document.querySelector('[data-tab="' + tab + '"]');
+  if (navItem) navItem.classList.add('active');
+  const titles = { feed: 'Live Feed', provenance: 'Provenance Log', policies: 'Policy Enforcement', remediation: 'Remediation', chain: 'Chain Integrity', admin: 'Client Admin', 'platform-admin': 'Tracemark Admin' };
   document.getElementById('pageTitle').textContent = titles[tab] || tab;
   // Close mobile sidebar on tab switch
   document.querySelector('.sidebar').classList.remove('open');
   if (tab === 'chain') verifyChainFull();
   if (tab === 'policies') loadPendingPolicies();
-  if (tab === 'admin') loadAdmin();
+  if (tab === 'admin') loadClientAdmin();
+  if (tab === 'platform-admin') { loadPlatformAdmin(); loadPlatformFilters(); }
 }
 
 function toggleSidebar() {
@@ -1777,113 +1787,135 @@ function editAutoRemediation(idx) {
   openWysiwygEditor('/api/remediation/registry/EMAIL_SENT/text', g.remediation_html, 'Edit Auto-Remediation: ' + g.policy_name);
 }
 
-// ── ADMIN ──
-let selectedCompanyId = null;
+// ── CLIENT ADMIN (single tenant) ──
+const CLIENT_COMPANY_ID = 'comp-acme'; // Current logged-in company
+let clientAdminTab = 'users';
 
-async function loadAdmin() {
+async function loadClientAdmin() {
   try {
-    const [dash, companies] = await Promise.all([
-      fetch(API + '/api/admin/dashboard').then(r => r.json()),
-      fetch(API + '/api/admin/companies').then(r => r.json()),
+    const [company, users, subs, billing, audit] = await Promise.all([
+      fetch(API + '/api/admin/companies/' + CLIENT_COMPANY_ID).then(r => r.json()),
+      fetch(API + '/api/admin/companies/' + CLIENT_COMPANY_ID + '/users').then(r => r.json()),
+      fetch(API + '/api/admin/companies/' + CLIENT_COMPANY_ID + '/subscriptions').then(r => r.json()),
+      fetch(API + '/api/admin/companies/' + CLIENT_COMPANY_ID + '/billing').then(r => r.json()),
+      fetch(API + '/api/admin/audit-log?company_id=' + CLIENT_COMPANY_ID + '&limit=50').then(r => r.json()),
     ]);
-    renderAdminDash(dash);
-    renderCompanyList(companies);
-    if (selectedCompanyId) loadCompanyDetail(selectedCompanyId);
-  } catch (err) { console.error('Admin load error:', err); }
+    renderClientAdmin(company, users, subs, billing, audit);
+  } catch (err) { console.error('Client admin error:', err); }
 }
 
-function renderAdminDash(d) {
-  document.getElementById('adminDashGrid').innerHTML =
-    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_companies + '</div><div class="admin-stat-label">Companies</div><div class="admin-stat-sub">' + d.active_companies + ' active</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_users + '</div><div class="admin-stat-label">Total Users</div><div class="admin-stat-sub">' + d.active_users + ' active · ' + d.suspended_users + ' suspended</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">' + d.total_requests.toLocaleString() + '</div><div class="admin-stat-label">Total Requests</div><div class="admin-stat-sub">' + d.total_tokens.toLocaleString() + ' tokens</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">$' + d.total_cost.toFixed(2) + '</div><div class="admin-stat-label">Total Cost</div><div class="admin-stat-sub">' + d.audit_entries + ' audit events</div></div>';
+function switchClientTab(tab) {
+  clientAdminTab = tab;
+  document.querySelectorAll('#clientAdminContent .admin-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('#clientAdminContent .admin-tab[data-tab="' + tab + '"]').classList.add('active');
+  document.querySelectorAll('#clientAdminContent .admin-tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById('clientTab-' + tab).classList.remove('hidden');
 }
 
-function renderCompanyList(companies) {
-  document.getElementById('companyList').innerHTML = companies.map(c =>
-    '<div class="card company-card' + (c.id === selectedCompanyId ? ' selected' : '') + '" onclick="selectCompany(\'' + c.id + '\')">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center">' +
-    '<div><span class="company-status ' + c.status + '"></span><span style="font-weight:600">' + escHtml(c.name) + '</span></div>' +
-    '<span class="company-plan-badge plan-' + c.plan + '">' + c.plan + '</span></div>' +
-    '<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">' +
-    c.user_count + ' users · ' + c.total_requests.toLocaleString() + ' requests · $' + (c.total_cost || 0).toFixed(2) +
-    '</div><div style="margin-top:4px"><span class="soc-badge">' + escHtml(c.soc_compliance_level || 'SOC2-Type-I') + '</span></div></div>'
-  ).join('');
-}
+function renderClientAdmin(company, users, subs, billing, audit) {
+  const el = document.getElementById('clientAdminContent');
+  const billingTotal = billing.reduce((s, b) => s + (b.total_usd || 0), 0);
+  const activeUsers = users.filter(u => u.status === 'active').length;
 
-function selectCompany(id) {
-  selectedCompanyId = id;
-  document.querySelectorAll('.company-card').forEach(c => {
-    c.classList.remove('selected');
-    if (c.getAttribute('onclick') && c.getAttribute('onclick').includes(id)) c.classList.add('selected');
-  });
-  loadCompanyDetail(id);
-}
+  // Find subscription dates
+  const firstSub = subs.length ? subs.reduce((a, b) => a.start_date < b.start_date ? a : b) : null;
+  const nextRenewal = subs.length ? subs.reduce((a, b) => a.renewal_date < b.renewal_date ? a : b) : null;
 
-async function loadCompanyDetail(companyId) {
-  const [company, users, audit] = await Promise.all([
-    fetch(API + '/api/admin/companies/' + companyId).then(r => r.json()),
-    fetch(API + '/api/admin/companies/' + companyId + '/users').then(r => r.json()),
-    fetch(API + '/api/admin/audit-log?company_id=' + companyId + '&limit=50').then(r => r.json()),
-  ]);
-  renderCompanyDetail(company, users, audit);
-}
+  el.innerHTML =
+    // Header
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">' +
+    '<div><span style="font-size:20px;font-weight:700">' + escHtml(company.name) + '</span> ' +
+    '<span class="company-plan-badge plan-' + company.plan + '">' + company.plan + '</span> ' +
+    '<span class="soc-badge">' + escHtml(company.soc_compliance_level) + '</span></div>' +
+    '<div style="font-size:11px;color:var(--text-muted)">' + escHtml(company.contact_email) + ' · ' + escHtml(company.address || '') + '</div></div>' +
 
-let adminActiveTab = 'users';
-
-function switchAdminTab(tab) {
-  adminActiveTab = tab;
-  document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.admin-tab[data-tab="' + tab + '"]').classList.add('active');
-  document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.add('hidden'));
-  document.getElementById('adminTab-' + tab).classList.remove('hidden');
-}
-
-function renderCompanyDetail(company, users, audit) {
-  const panel = document.getElementById('adminDetailPanel');
-  const usagePct = company.max_requests_per_month > 0 ? Math.min(100, Math.round((company.total_requests || 0) / company.max_requests_per_month * 100)) : 0;
-  const usageColor = usagePct > 80 ? 'var(--red-violation)' : usagePct > 50 ? 'var(--amber-accent)' : 'var(--teal-primary)';
-  const userPct = company.max_users > 0 ? Math.min(100, Math.round((company.user_count || users.length) / company.max_users * 100)) : 0;
-
-  panel.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
-    '<div><span class="company-status ' + company.status + '"></span><span style="font-size:18px;font-weight:700">' + escHtml(company.name) + '</span>' +
-    ' <span class="company-plan-badge plan-' + company.plan + '">' + company.plan + '</span>' +
-    ' <span class="soc-badge">' + escHtml(company.soc_compliance_level) + '</span></div>' +
-    '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
-    (company.status === 'active' ?
-      '<button class="btn-danger" onclick="suspendCompany(\'' + company.id + '\')">Suspend</button>' :
-      '<button class="btn-approve" onclick="activateCompany(\'' + company.id + '\')">Activate</button>') +
-    '<button class="btn-secondary" style="font-size:11px;padding:6px 10px" onclick="deleteCompany(\'' + company.id + '\')">Delete</button></div></div>' +
-
-    // Info row
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px">' +
-    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Contact</div><div style="font-size:12px">' + escHtml(company.contact_email || '-') + '</div><div style="font-size:11px;color:var(--text-muted)">' + escHtml(company.contact_phone || '') + '</div></div>' +
-    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Request Usage</div><div style="font-size:16px;font-weight:700;color:' + usageColor + '">' + usagePct + '%</div><div class="consumption-bar"><div class="consumption-fill" style="width:' + usagePct + '%;background:' + usageColor + '"></div></div><div style="font-size:10px;color:var(--text-muted);margin-top:2px">' + (company.total_requests||0).toLocaleString() + ' / ' + company.max_requests_per_month.toLocaleString() + '</div></div>' +
-    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Users</div><div style="font-size:16px;font-weight:700;color:var(--teal-primary)">' + users.length + ' / ' + company.max_users + '</div><div class="consumption-bar"><div class="consumption-fill" style="width:' + userPct + '%;background:var(--teal-primary)"></div></div></div>' +
-    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Settings</div><div style="font-size:11px">MFA: ' + (company.mfa_required ? '<span style="color:var(--teal-primary)">Required</span>' : '<span style="color:var(--text-muted)">Off</span>') + '</div><div style="font-size:11px">Retention: ' + company.data_retention_days + ' days</div></div></div>' +
+    // Stats row
+    '<div class="admin-grid" style="margin-bottom:20px">' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + users.length + '</div><div class="admin-stat-label">Users</div><div class="admin-stat-sub">' + activeUsers + ' active</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + subs.length + '</div><div class="admin-stat-label">Modules</div><div class="admin-stat-sub">' + subs.filter(s => s.status === 'active').length + ' active</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">$' + billingTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div><div class="admin-stat-label">Q1 2026 Total</div><div class="admin-stat-sub">Current billing period</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + (firstSub ? firstSub.start_date.substring(0,10) : '-') + '</div><div class="admin-stat-label">Start Date</div><div class="admin-stat-sub">Renewal: ' + (nextRenewal ? nextRenewal.renewal_date.substring(0,10) : '-') + '</div></div>' +
+    '</div>' +
 
     // Tabs
     '<div class="admin-tabs">' +
-    '<div class="admin-tab' + (adminActiveTab==='users'?' active':'') + '" data-tab="users" onclick="switchAdminTab(\'users\')">Users (' + users.length + ')</div>' +
-    '<div class="admin-tab' + (adminActiveTab==='audit'?' active':'') + '" data-tab="audit" onclick="switchAdminTab(\'audit\')">Audit Log (' + audit.length + ')</div>' +
-    '<div class="admin-tab' + (adminActiveTab==='settings'?' active':'') + '" data-tab="settings" onclick="switchAdminTab(\'settings\')">Settings</div></div>' +
+    '<div class="admin-tab' + (clientAdminTab==='users'?' active':'') + '" data-tab="users" onclick="switchClientTab(\'users\')">Users (' + users.length + ')</div>' +
+    '<div class="admin-tab' + (clientAdminTab==='subscription'?' active':'') + '" data-tab="subscription" onclick="switchClientTab(\'subscription\')">Subscription</div>' +
+    '<div class="admin-tab' + (clientAdminTab==='billing'?' active':'') + '" data-tab="billing" onclick="switchClientTab(\'billing\')">Billing & Costs</div>' +
+    '<div class="admin-tab' + (clientAdminTab==='audit'?' active':'') + '" data-tab="audit" onclick="switchClientTab(\'audit\')">Audit Log</div></div>' +
 
-    // Users tab
-    '<div id="adminTab-users" class="admin-tab-content' + (adminActiveTab!=='users'?' hidden':'') + '">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
-    '<input class="prov-search" placeholder="Search users..." oninput="filterAdminUsers(this.value)" style="max-width:250px;font-size:12px">' +
+    // Users
+    '<div id="clientTab-users" class="admin-tab-content' + (clientAdminTab!=='users'?' hidden':'') + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0">' +
+    '<input class="prov-search" placeholder="Search users..." oninput="filterClientUsers(this.value)" style="max-width:280px;font-size:12px">' +
     '<button class="btn-primary" style="font-size:11px;padding:6px 12px" onclick="openCreateUser(\'' + company.id + '\')">+ Add User</button></div>' +
-    '<div id="adminUserList">' + renderUserRows(users) + '</div></div>' +
+    '<div id="clientUserList">' + renderUserRows(users) + '</div></div>' +
 
-    // Audit tab
-    '<div id="adminTab-audit" class="admin-tab-content' + (adminActiveTab!=='audit'?' hidden':'') + '">' +
-    renderAuditRows(audit) + '</div>' +
+    // Subscription
+    '<div id="clientTab-subscription" class="admin-tab-content' + (clientAdminTab!=='subscription'?' hidden':'') + '">' +
+    renderSubscriptions(subs) + '</div>' +
 
-    // Settings tab
-    '<div id="adminTab-settings" class="admin-tab-content' + (adminActiveTab!=='settings'?' hidden':'') + '">' +
-    renderCompanySettings(company) + '</div>';
+    // Billing
+    '<div id="clientTab-billing" class="admin-tab-content' + (clientAdminTab!=='billing'?' hidden':'') + '">' +
+    renderBilling(billing) + '</div>' +
+
+    // Audit
+    '<div id="clientTab-audit" class="admin-tab-content' + (clientAdminTab!=='audit'?' hidden':'') + '">' +
+    renderAuditRows(audit) + '</div>';
+}
+
+function renderSubscriptions(subs) {
+  const modules = {interception: {icon: '🔍', label: 'Interception'}, provenance: {icon: '🔗', label: 'Provenance'}, remediation: {icon: '🔧', label: 'Remediation'}};
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:12px">' +
+    subs.map(s => {
+      const m = modules[s.module] || {icon: '📦', label: s.module};
+      const isFree = s.tier === 'free' || s.unit_price_usd === 0;
+      return '<div class="card" style="padding:20px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+        '<div style="font-size:16px;font-weight:700">' + m.icon + ' ' + m.label + '</div>' +
+        '<span class="badge ' + (s.status === 'active' ? 'badge-pass' : 'badge-warning') + '">' + s.status + '</span></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">' +
+        '<div><span style="color:var(--text-muted)">Tier</span><div style="font-weight:600;text-transform:capitalize">' + escHtml(s.tier) + '</div></div>' +
+        '<div><span style="color:var(--text-muted)">Licenses</span><div style="font-weight:600">' + s.license_count + '</div></div>' +
+        '<div><span style="color:var(--text-muted)">Unit Price</span><div style="font-weight:600;color:' + (isFree ? 'var(--teal-primary)' : 'var(--amber-accent)') + '">' + (isFree ? 'FREE' : '$' + s.unit_price_usd.toFixed(2) + '/seat/yr') + '</div></div>' +
+        '<div><span style="color:var(--text-muted)">Annual Value</span><div style="font-weight:600;color:' + (isFree ? 'var(--teal-primary)' : 'white') + '">' + (isFree ? '$0' : '$' + (s.license_count * s.unit_price_usd).toLocaleString()) + '</div></div>' +
+        '</div>' +
+        '<hr class="divider">' +
+        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)">' +
+        '<span>Start: ' + s.start_date.substring(0,10) + '</span>' +
+        '<span>Renewal: ' + s.renewal_date.substring(0,10) + '</span></div>' +
+        (s.notes ? '<div style="margin-top:6px;font-size:10px;color:var(--text-muted);font-style:italic">' + escHtml(s.notes) + '</div>' : '') +
+        '</div>';
+    }).join('') + '</div>';
+}
+
+function renderBilling(billing) {
+  if (!billing.length) return '<div style="text-align:center;padding:20px;color:var(--text-muted)">No billing transactions</div>';
+  const total = billing.reduce((s, b) => s + (b.total_usd || 0), 0);
+  const byModule = {};
+  billing.forEach(b => { byModule[b.module] = (byModule[b.module] || 0) + b.total_usd; });
+
+  return '<div style="margin-top:12px">' +
+    // Summary cards
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">' +
+    '<div class="card" style="padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted)">Q1 2026 Total</div><div style="font-size:28px;font-weight:700;color:var(--amber-accent)">$' + total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>' +
+    Object.keys(byModule).map(m =>
+      '<div class="card" style="padding:16px;text-align:center"><div style="font-size:11px;color:var(--text-muted)">' + m.charAt(0).toUpperCase() + m.slice(1) + '</div><div style="font-size:20px;font-weight:700;color:' + (byModule[m] === 0 ? 'var(--teal-primary)' : 'white') + '">$' + byModule[m].toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>'
+    ).join('') + '</div>' +
+    // Line items table
+    '<div class="table-container"><table><thead><tr>' +
+    '<th>Module</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th><th>Period</th></tr></thead><tbody>' +
+    billing.map(b =>
+      '<tr><td><span class="badge badge-' + (b.module === 'interception' ? 'pass' : b.module === 'provenance' ? 'warning' : 'remediated') + '">' + b.module + '</span></td>' +
+      '<td>' + escHtml(b.description) + '</td>' +
+      '<td>' + b.quantity + '</td>' +
+      '<td>' + (b.unit_price_usd === 0 ? '<span style="color:var(--teal-primary)">FREE</span>' : '$' + b.unit_price_usd.toFixed(2)) + '</td>' +
+      '<td style="font-weight:600;color:' + (b.total_usd === 0 ? 'var(--teal-primary)' : 'var(--amber-accent)') + '">$' + b.total_usd.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td>' +
+      '<td style="font-size:10px;color:var(--text-muted)">' + b.period_start.substring(0,10) + ' → ' + b.period_end.substring(0,10) + '</td></tr>'
+    ).join('') +
+    '<tr style="border-top:2px solid var(--teal-primary)"><td colspan="4" style="text-align:right;font-weight:700">TOTAL</td>' +
+    '<td style="font-weight:700;font-size:14px;color:var(--amber-accent)">$' + total.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</td><td></td></tr>' +
+    '</tbody></table></div></div>';
 }
 
 function renderUserRows(users) {
@@ -1907,17 +1939,16 @@ function renderUserRows(users) {
   }).join('');
 }
 
-function filterAdminUsers(q) {
+function filterClientUsers(q) {
   const term = q.toLowerCase();
-  document.querySelectorAll('#adminUserList .user-row').forEach(row => {
-    const search = row.getAttribute('data-search') || '';
-    row.style.display = search.includes(term) ? '' : 'none';
+  document.querySelectorAll('#clientUserList .user-row').forEach(row => {
+    row.style.display = (row.getAttribute('data-search') || '').includes(term) ? '' : 'none';
   });
 }
 
 function auditActionClass(action) {
   if (action.includes('login')) return 'login';
-  if (action.includes('created')) return 'created';
+  if (action.includes('created') || action.includes('renewed')) return 'created';
   if (action.includes('deleted') || action.includes('suspended')) return 'suspended';
   if (action.includes('updated') || action.includes('password') || action.includes('reset')) return 'updated';
   return '';
@@ -1936,58 +1967,118 @@ function renderAuditRows(entries) {
   ).join('');
 }
 
-function renderCompanySettings(c) {
-  return '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-    '<div class="form-group"><label class="form-label">Company Name</label><input class="form-input" id="editCompName" value="' + escHtml(c.name) + '"></div>' +
-    '<div class="form-group"><label class="form-label">Plan</label><select class="form-select" id="editCompPlan"><option value="starter"' + (c.plan==='starter'?' selected':'') + '>Starter</option><option value="business"' + (c.plan==='business'?' selected':'') + '>Business</option><option value="enterprise"' + (c.plan==='enterprise'?' selected':'') + '>Enterprise</option></select></div>' +
-    '<div class="form-group"><label class="form-label">Contact Email</label><input class="form-input" id="editCompEmail" value="' + escHtml(c.contact_email || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Contact Phone</label><input class="form-input" id="editCompPhone" value="' + escHtml(c.contact_phone || '') + '"></div>' +
-    '<div class="form-group"><label class="form-label">Max Users</label><input class="form-input" id="editCompMaxUsers" type="number" value="' + (c.max_users || 50) + '"></div>' +
-    '<div class="form-group"><label class="form-label">Max Requests/Month</label><input class="form-input" id="editCompMaxReq" type="number" value="' + (c.max_requests_per_month || 100000) + '"></div>' +
-    '<div class="form-group"><label class="form-label">SOC Compliance Level</label><select class="form-select" id="editCompSOC"><option value="SOC2-Type-I"' + (c.soc_compliance_level==='SOC2-Type-I'?' selected':'') + '>SOC2 Type I</option><option value="SOC2-Type-II"' + (c.soc_compliance_level==='SOC2-Type-II'?' selected':'') + '>SOC2 Type II</option></select></div>' +
-    '<div class="form-group"><label class="form-label">Data Retention (days)</label><input class="form-input" id="editCompRetention" type="number" value="' + (c.data_retention_days || 90) + '"></div>' +
-    '<div class="form-group"><label class="form-label">MFA Required</label><select class="form-select" id="editCompMFA"><option value="0"' + (!c.mfa_required?' selected':'') + '>No</option><option value="1"' + (c.mfa_required?' selected':'') + '>Yes</option></select></div>' +
-    '</div>' +
-    '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">' +
-    '<button class="btn-primary" onclick="saveCompanySettings(\'' + c.id + '\')">Save Settings</button></div>';
+// ── PLATFORM ADMIN (Tracemark Admin) ──
+let platformFiltersLoaded = false;
+
+async function loadPlatformFilters() {
+  if (platformFiltersLoaded) return;
+  const dash = await fetch(API + '/api/admin/dashboard').then(r => r.json());
+  const regionSel = document.getElementById('platformFilterRegion');
+  const cohortSel = document.getElementById('platformFilterCohort');
+  regionSel.innerHTML = '<option value="">All Regions</option>' + (dash.regions || []).map(r => '<option value="' + r + '">' + r + '</option>').join('');
+  cohortSel.innerHTML = '<option value="">All Cohorts</option>' + (dash.cohorts || []).map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  platformFiltersLoaded = true;
 }
 
-async function saveCompanySettings(id) {
-  const body = {
-    name: document.getElementById('editCompName').value,
-    plan: document.getElementById('editCompPlan').value,
-    contact_email: document.getElementById('editCompEmail').value,
-    contact_phone: document.getElementById('editCompPhone').value,
-    max_users: parseInt(document.getElementById('editCompMaxUsers').value),
-    max_requests_per_month: parseInt(document.getElementById('editCompMaxReq').value),
-    soc_compliance_level: document.getElementById('editCompSOC').value,
-    data_retention_days: parseInt(document.getElementById('editCompRetention').value),
-    mfa_required: document.getElementById('editCompMFA').value === '1',
-  };
-  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
-  loadAdmin();
+async function loadPlatformAdmin() {
+  const region = document.getElementById('platformFilterRegion').value;
+  const cohort = document.getElementById('platformFilterCohort').value;
+  const status = document.getElementById('platformFilterStatus').value;
+  let qs = '?';
+  if (region) qs += 'region=' + region + '&';
+  if (cohort) qs += 'cohort=' + cohort + '&';
+  if (status) qs += 'status=' + status + '&';
+
+  const [dash, companies] = await Promise.all([
+    fetch(API + '/api/admin/dashboard').then(r => r.json()),
+    fetch(API + '/api/admin/companies' + qs).then(r => r.json()),
+  ]);
+
+  document.getElementById('platformDashGrid').innerHTML =
+    '<div class="admin-stat"><div class="admin-stat-num">' + companies.length + '</div><div class="admin-stat-label">Clients</div><div class="admin-stat-sub">' + companies.filter(c=>c.status==='active').length + ' active</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + companies.reduce((s,c)=>s+c.user_count,0) + '</div><div class="admin-stat-label">Total Users</div><div class="admin-stat-sub">' + companies.reduce((s,c)=>s+c.active_users,0) + ' active</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">' + dash.total_requests.toLocaleString() + '</div><div class="admin-stat-label">Total Requests</div><div class="admin-stat-sub">' + dash.total_tokens.toLocaleString() + ' tokens</div></div>' +
+    '<div class="admin-stat"><div class="admin-stat-num">$' + (dash.total_revenue || 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div><div class="admin-stat-label">Total Revenue</div><div class="admin-stat-sub">' + dash.paying_companies + ' paying clients</div></div>';
+
+  document.getElementById('platformClientList').innerHTML =
+    '<div class="table-container" style="margin-top:12px"><table><thead><tr>' +
+    '<th>Company</th><th>Plan</th><th>Region</th><th>Cohort</th><th>Status</th><th>Users</th><th>SOC</th><th>Actions</th>' +
+    '</tr></thead><tbody>' +
+    companies.map(c =>
+      '<tr class="data-row" style="cursor:pointer" onclick="expandPlatformClient(\'' + c.id + '\')">' +
+      '<td style="font-weight:600"><span class="company-status ' + c.status + '"></span>' + escHtml(c.name) + '</td>' +
+      '<td><span class="company-plan-badge plan-' + c.plan + '">' + c.plan + '</span></td>' +
+      '<td>' + escHtml(c.region || '-') + '</td>' +
+      '<td style="font-size:11px">' + escHtml(c.cohort || '-') + '</td>' +
+      '<td><span class="badge ' + (c.status==='active'?'badge-pass':'badge-violation') + '">' + c.status + '</span></td>' +
+      '<td>' + c.user_count + ' <span style="color:var(--text-muted);font-size:10px">(' + c.active_users + ' active)</span></td>' +
+      '<td><span class="soc-badge" style="font-size:9px;padding:2px 6px">' + escHtml(c.soc_compliance_level || '') + '</span></td>' +
+      '<td><button class="btn-secondary" style="font-size:10px;padding:3px 8px" onclick="event.stopPropagation();expandPlatformClient(\'' + c.id + '\')">Details</button></td></tr>'
+    ).join('') + '</tbody></table></div>';
 }
 
-async function suspendCompany(id) {
-  if (!confirm('Suspend this company?')) return;
-  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: 'suspended'}) });
-  loadAdmin();
+async function expandPlatformClient(companyId) {
+  const panel = document.getElementById('platformClientDetail');
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted)">Loading...</div>';
+  panel.scrollIntoView({behavior: 'smooth'});
+
+  const [company, users, subs, billing, audit] = await Promise.all([
+    fetch(API + '/api/admin/companies/' + companyId).then(r => r.json()),
+    fetch(API + '/api/admin/companies/' + companyId + '/users').then(r => r.json()),
+    fetch(API + '/api/admin/companies/' + companyId + '/subscriptions').then(r => r.json()),
+    fetch(API + '/api/admin/companies/' + companyId + '/billing').then(r => r.json()),
+    fetch(API + '/api/admin/audit-log?company_id=' + companyId + '&limit=30').then(r => r.json()),
+  ]);
+
+  const billingTotal = billing.reduce((s, b) => s + (b.total_usd || 0), 0);
+
+  panel.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">' +
+    '<div><span style="font-size:18px;font-weight:700">' + escHtml(company.name) + '</span> ' +
+    '<span class="company-plan-badge plan-' + company.plan + '">' + company.plan + '</span> ' +
+    '<span class="soc-badge">' + escHtml(company.soc_compliance_level) + '</span> ' +
+    '<span style="font-size:11px;color:var(--text-muted)">' + escHtml(company.region || '') + ' · ' + escHtml(company.cohort || '') + '</span></div>' +
+    '<button style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer" onclick="document.getElementById(\'platformClientDetail\').style.display=\'none\'">&times;</button></div>' +
+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Users</div><div style="font-size:18px;font-weight:700">' + users.length + ' / ' + company.max_users + '</div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Modules</div><div style="font-size:18px;font-weight:700">' + subs.length + '</div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Q1 Revenue</div><div style="font-size:18px;font-weight:700;color:var(--amber-accent)">$' + billingTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) + '</div></div>' +
+    '<div class="card" style="padding:12px"><div style="font-size:11px;color:var(--text-muted)">Contact</div><div style="font-size:12px">' + escHtml(company.contact_email) + '</div></div></div>' +
+
+    // Subscriptions
+    '<div class="section-title" style="font-size:12px">Subscriptions</div>' + renderSubscriptions(subs) +
+
+    // Users
+    '<div class="section-title" style="font-size:12px;margin-top:16px">Users (' + users.length + ')</div>' +
+    renderUserRows(users) +
+
+    // Billing
+    '<div class="section-title" style="font-size:12px;margin-top:16px">Billing</div>' + renderBilling(billing) +
+
+    // Audit
+    '<div class="section-title" style="font-size:12px;margin-top:16px">Recent Audit</div>' + renderAuditRows(audit);
 }
 
-async function activateCompany(id) {
-  await fetch(API + '/api/admin/companies/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status: 'active'}) });
-  loadAdmin();
-}
-
-async function deleteCompany(id) {
-  if (!confirm('Delete this company and all its users? This cannot be undone.')) return;
-  await fetch(API + '/api/admin/companies/' + id, { method: 'DELETE' });
-  selectedCompanyId = null;
-  loadAdmin();
-}
-
+// ── Shared admin actions ──
+let createUserCompanyId = '';
+function openCreateUser(companyId) { createUserCompanyId = companyId; document.getElementById('createUserModal').classList.add('open'); }
+function closeCreateUser() { document.getElementById('createUserModal').classList.remove('open'); }
 function openCreateCompany() { document.getElementById('createCompanyModal').classList.add('open'); }
 function closeCreateCompany() { document.getElementById('createCompanyModal').classList.remove('open'); }
+
+async function submitNewUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  const email = document.getElementById('newUserEmail').value.trim();
+  if (!name || !email) { alert('Name and email are required'); return; }
+  await fetch(API + '/api/admin/companies/' + createUserCompanyId + '/users', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ display_name: name, email, role: document.getElementById('newUserRole').value, company_id: createUserCompanyId }),
+  });
+  closeCreateUser();
+  loadClientAdmin();
+}
 
 async function submitNewCompany() {
   const name = document.getElementById('newCompName').value.trim();
@@ -2005,47 +2096,28 @@ async function submitNewCompany() {
     }),
   });
   closeCreateCompany();
-  loadAdmin();
-}
-
-let createUserCompanyId = '';
-function openCreateUser(companyId) { createUserCompanyId = companyId; document.getElementById('createUserModal').classList.add('open'); }
-function closeCreateUser() { document.getElementById('createUserModal').classList.remove('open'); }
-
-async function submitNewUser() {
-  const name = document.getElementById('newUserName').value.trim();
-  const email = document.getElementById('newUserEmail').value.trim();
-  if (!name || !email) { alert('Name and email are required'); return; }
-  await fetch(API + '/api/admin/companies/' + createUserCompanyId + '/users', {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ display_name: name, email, role: document.getElementById('newUserRole').value, company_id: createUserCompanyId }),
-  });
-  closeCreateUser();
-  loadCompanyDetail(selectedCompanyId);
+  loadPlatformAdmin();
 }
 
 async function adminSuspendUser(id) {
   if (!confirm('Suspend this user?')) return;
   await fetch(API + '/api/admin/users/' + id + '/suspend', { method: 'POST' });
-  loadCompanyDetail(selectedCompanyId);
+  loadClientAdmin();
 }
-
 async function adminActivateUser(id) {
   await fetch(API + '/api/admin/users/' + id + '/activate', { method: 'POST' });
-  loadCompanyDetail(selectedCompanyId);
+  loadClientAdmin();
 }
-
 async function adminResetPassword(id) {
-  if (!confirm('Reset this user\'s password?')) return;
+  if (!confirm('Reset password?')) return;
   await fetch(API + '/api/admin/users/' + id + '/reset-password', { method: 'POST' });
-  alert('Password reset successfully. A temporary password has been generated.');
-  loadCompanyDetail(selectedCompanyId);
+  alert('Password reset successfully.');
+  loadClientAdmin();
 }
-
 async function adminDeleteUser(id) {
   if (!confirm('Delete this user permanently?')) return;
   await fetch(API + '/api/admin/users/' + id, { method: 'DELETE' });
-  loadCompanyDetail(selectedCompanyId);
+  loadClientAdmin();
 }
 
 // ── UPDATE TIMER ──
