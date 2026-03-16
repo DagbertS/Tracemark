@@ -43,6 +43,7 @@ provenance_store: ProvenanceStore = None  # type: ignore
 saga_orchestrator: SAGAOrchestrator = None  # type: ignore
 sanitization_engine: Optional[SanitizationEngine] = None
 upstream_config: dict[str, Any] = {}
+_provenance_lock = asyncio.Lock()
 
 # Mock responses for demo mode — each triggers different policy outcomes
 MOCK_RESPONSES = [
@@ -294,11 +295,12 @@ def _google_to_openai_response(google_resp: dict, model: str) -> dict:
 
 
 async def _log_provenance_async(entry: ProvenanceEntry):
-    """Background task to log provenance entry without blocking response."""
-    try:
-        await provenance_store.append(entry)
-    except Exception as e:
-        logger.error(f"Async provenance write failed (fail-open): {e}")
+    """Log provenance entry with lock to guarantee sequential chain ordering."""
+    async with _provenance_lock:
+        try:
+            await provenance_store.append(entry)
+        except Exception as e:
+            logger.error(f"Async provenance write failed (fail-open): {e}")
 
 
 async def _forward_to_upstream(provider: str, model_name: str, body: dict,
@@ -794,8 +796,7 @@ async def chat_completions(request: Request):
         entities_masked=entities_masked,
         **_enriched_fields(),
     )
-    # Async provenance write — don't block the response path
-    asyncio.create_task(_log_provenance_async(entry))
+    await _log_provenance_async(entry)
 
     # [7] RETURN RESPONSE
     headers = {
