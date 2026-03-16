@@ -440,7 +440,8 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
 
 /* ── ADMIN ── */
 .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 24px; }
-.admin-stat { background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-subtle); padding: 20px; text-align: center; }
+.admin-stat { background: var(--bg-card); border-radius: 6px; border: 1px solid var(--border-subtle); padding: 20px; text-align: center; transition: border-color .2s, transform .15s; }
+.admin-stat[style*="cursor:pointer"]:hover { border-color: var(--teal-primary); transform: translateY(-2px); }
 .admin-stat-num { font-size: 32px; font-weight: 700; color: var(--teal-primary); }
 .admin-stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 .admin-stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
@@ -694,6 +695,27 @@ tr.data-row:hover td { background: var(--bg-card-hover); cursor: pointer; }
           <button class="btn-secondary" onclick="openSuggestPolicies()">⚡ Auto-Suggest from History</button>
           <button class="btn-primary" onclick="openCreatePolicy()">+ New Policy</button>
         </div>
+      </div>
+      <!-- Search & filter bar -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+        <input class="prov-search" id="policySearch" placeholder="Search policies..." oninput="filterPolicies()" style="flex:1;min-width:180px;font-size:12px">
+        <select class="prov-filter-select" id="policyFilterType" onchange="filterPolicies()" style="font-size:12px">
+          <option value="">All Types</option>
+          <option value="PRE_CALL">Pre-call</option>
+          <option value="POST_CALL">Post-call</option>
+          <option value="BOTH">Both</option>
+        </select>
+        <select class="prov-filter-select" id="policyFilterAction" onchange="filterPolicies()" style="font-size:12px">
+          <option value="">All Actions</option>
+          <option value="BLOCK">Block</option>
+          <option value="ALLOW_AND_LOG">Allow & Log</option>
+          <option value="REMEDIATE">Remediate</option>
+        </select>
+        <select class="prov-filter-select" id="policyFilterStatus" onchange="filterPolicies()" style="font-size:12px">
+          <option value="">All Status</option>
+          <option value="enabled">Enabled</option>
+          <option value="disabled">Disabled</option>
+        </select>
       </div>
       <!-- Pending policies section -->
       <div id="pendingPoliciesSection" class="hidden">
@@ -1346,33 +1368,62 @@ function syntaxHighlight(json) {
 }
 
 // ── POLICIES ──
+let _allPolicies = [];
+
+function renderPolicyCard(p) {
+  let rules = '';
+  if (p.config && p.config.patterns) rules = p.config.patterns.map(r => '<li>' + escHtml(r.name) + ': <span class="mono" style="font-size:11px">' + escHtml(r.regex || '') + '</span></li>').join('');
+  else if (p.config && p.config.forbidden_topics) rules = p.config.forbidden_topics.map(t => '<li>' + escHtml(t) + '</li>').join('');
+  else if (p.config && p.config.uncertainty_phrases) rules = p.config.uncertainty_phrases.map(t => '<li>' + escHtml(t) + '</li>').join('');
+
+  return '<div class="card policy-card" data-policy-type="' + p.type + '" data-policy-action="' + p.action + '" data-policy-enabled="' + !!p.enabled + '">' +
+    '<div class="card-header">' + escHtml(p.name) + ' <span class="toggle ' + (p.enabled ? 'toggle-on' : 'toggle-off') + '" onclick="togglePolicy(\'' + p.id + '\', ' + !p.enabled + ')">' + (p.enabled ? 'ON' : 'OFF') + '</span></div>' +
+    '<div style="margin:6px 0"><span class="badge badge-indeterminate">' + p.type + '</span> <span class="badge ' + badgeClass(p.action === 'BLOCK' ? 'BLOCKED' : 'WARNING') + '">' + p.action + '</span></div>' +
+    '<hr class="divider"><div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Rules</div>' +
+    '<ul class="rule-list">' + rules + '</ul>' +
+    (p.remediation_text ? '<div class="rem-text-preview">' + p.remediation_text + '</div>' : '') +
+    '<div style="margin-top:10px;display:flex;gap:6px">' +
+    '<button class="btn-secondary" onclick="openWysiwygEditor(\'/api/policies/' + p.id + '/remediation-text\', ' + escAttr(p.remediation_text || '') + ', \'Remediation: ' + escHtml(p.name) + '\')">✏ ' + (p.remediation_text ? 'Edit' : 'Add') + ' Remediation</button>' +
+    '<button class="btn-danger" onclick="deletePolicy(\'' + p.id + '\')">Delete</button>' +
+    '</div></div>';
+}
+
+function filterPolicies() {
+  const query = (document.getElementById('policySearch').value || '').toLowerCase();
+  const typeFilter = document.getElementById('policyFilterType').value;
+  const actionFilter = document.getElementById('policyFilterAction').value;
+  const statusFilter = document.getElementById('policyFilterStatus').value;
+
+  const filtered = _allPolicies.filter(p => {
+    if (query && !p.name.toLowerCase().includes(query) && !(p.type || '').toLowerCase().includes(query) && !(p.action || '').toLowerCase().includes(query)) return false;
+    if (typeFilter && p.type !== typeFilter) return false;
+    if (actionFilter && p.action !== actionFilter) return false;
+    if (statusFilter === 'enabled' && !p.enabled) return false;
+    if (statusFilter === 'disabled' && p.enabled) return false;
+    return true;
+  });
+
+  const grid = document.getElementById('policyGrid');
+  grid.innerHTML = filtered.length
+    ? filtered.map(renderPolicyCard).join('')
+    : '<div style="text-align:center;padding:32px;color:var(--text-muted);grid-column:1/-1">No policies match your filters</div>';
+}
+
 async function loadPolicies() {
   try {
-    const policies = await fetch(API + '/api/policies').then(r => r.json());
+    _allPolicies = await fetch(API + '/api/policies').then(r => r.json());
     const grid = document.getElementById('policyGrid');
     const sidebar = document.getElementById('sidebarPolicies');
 
-    grid.innerHTML = policies.map(p => {
-      let rules = '';
-      if (p.config && p.config.patterns) rules = p.config.patterns.map(r => '<li>' + escHtml(r.name) + ': <span class="mono" style="font-size:11px">' + escHtml(r.regex || '') + '</span></li>').join('');
-      else if (p.config && p.config.forbidden_topics) rules = p.config.forbidden_topics.map(t => '<li>' + escHtml(t) + '</li>').join('');
-      else if (p.config && p.config.uncertainty_phrases) rules = p.config.uncertainty_phrases.map(t => '<li>' + escHtml(t) + '</li>').join('');
+    grid.innerHTML = _allPolicies.map(renderPolicyCard).join('');
 
-      return '<div class="card policy-card">' +
-        '<div class="card-header">' + escHtml(p.name) + ' <span class="toggle ' + (p.enabled ? 'toggle-on' : 'toggle-off') + '" onclick="togglePolicy(\'' + p.id + '\', ' + !p.enabled + ')">' + (p.enabled ? 'ON' : 'OFF') + '</span></div>' +
-        '<div style="margin:6px 0"><span class="badge badge-indeterminate">' + p.type + '</span> <span class="badge ' + badgeClass(p.action === 'BLOCK' ? 'BLOCKED' : 'WARNING') + '">' + p.action + '</span></div>' +
-        '<hr class="divider"><div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Rules</div>' +
-        '<ul class="rule-list">' + rules + '</ul>' +
-        (p.remediation_text ? '<div class="rem-text-preview">' + p.remediation_text + '</div>' : '') +
-        '<div style="margin-top:10px;display:flex;gap:6px">' +
-        '<button class="btn-secondary" onclick="openWysiwygEditor(\'/api/policies/' + p.id + '/remediation-text\', ' + escAttr(p.remediation_text || '') + ', \'Remediation: ' + escHtml(p.name) + '\')">✏ ' + (p.remediation_text ? 'Edit' : 'Add') + ' Remediation</button>' +
-        '<button class="btn-danger" onclick="deletePolicy(\'' + p.id + '\')">Delete</button>' +
-        '</div></div>';
-    }).join('');
-
-    sidebar.innerHTML = policies.map(p =>
+    sidebar.innerHTML = _allPolicies.map(p =>
       '<div class="policy-mini-card"><div class="policy-mini-name">' + escHtml(p.name) + '</div><div class="policy-mini-type">' + p.type + '</div></div>'
     ).join('');
+
+    // Re-apply any active filters
+    const hasFilter = document.getElementById('policySearch').value || document.getElementById('policyFilterType').value || document.getElementById('policyFilterAction').value || document.getElementById('policyFilterStatus').value;
+    if (hasFilter) filterPolicies();
   } catch (err) {
     console.error('Policies load error:', err);
   }
@@ -1932,6 +1983,9 @@ function switchClientTab(tab) {
   document.querySelector('#clientAdminContent .admin-tab[data-tab="' + tab + '"]').classList.add('active');
   document.querySelectorAll('#clientAdminContent .admin-tab-content').forEach(c => c.classList.add('hidden'));
   document.getElementById('clientTab-' + tab).classList.remove('hidden');
+  // Scroll the tab section into view
+  const tabRow = document.querySelector('#clientAdminContent .admin-tabs');
+  if (tabRow) tabRow.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 function renderClientAdmin(company, users, subs, billing, audit) {
@@ -1953,10 +2007,10 @@ function renderClientAdmin(company, users, subs, billing, audit) {
 
     // Stats row
     '<div class="admin-grid" style="margin-bottom:20px">' +
-    '<div class="admin-stat"><div class="admin-stat-num">' + users.length + '</div><div class="admin-stat-label">Users</div><div class="admin-stat-sub">' + activeUsers + ' active</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">' + subs.length + '</div><div class="admin-stat-label">Modules</div><div class="admin-stat-sub">' + subs.filter(s => s.status === 'active').length + ' active</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">$' + billingTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div><div class="admin-stat-label">Q1 2026 Total</div><div class="admin-stat-sub">Current billing period</div></div>' +
-    '<div class="admin-stat"><div class="admin-stat-num">' + (firstSub ? firstSub.start_date.substring(0,10) : '-') + '</div><div class="admin-stat-label">Start Date</div><div class="admin-stat-sub">Renewal: ' + (nextRenewal ? nextRenewal.renewal_date.substring(0,10) : '-') + '</div></div>' +
+    '<div class="admin-stat" style="cursor:pointer" onclick="switchClientTab(\'users\')" title="View Users"><div class="admin-stat-num">' + users.length + '</div><div class="admin-stat-label">Users</div><div class="admin-stat-sub">' + activeUsers + ' active</div></div>' +
+    '<div class="admin-stat" style="cursor:pointer" onclick="switchClientTab(\'subscription\')" title="View Modules"><div class="admin-stat-num">' + subs.length + '</div><div class="admin-stat-label">Modules</div><div class="admin-stat-sub">' + subs.filter(s => s.status === 'active').length + ' active</div></div>' +
+    '<div class="admin-stat" style="cursor:pointer" onclick="switchClientTab(\'billing\')" title="View Billing"><div class="admin-stat-num">$' + billingTotal.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div><div class="admin-stat-label">Q1 2026 Total</div><div class="admin-stat-sub">Current billing period</div></div>' +
+    '<div class="admin-stat" style="cursor:pointer" onclick="switchClientTab(\'subscription\')" title="View Subscription"><div class="admin-stat-num">' + (firstSub ? firstSub.start_date.substring(0,10) : '-') + '</div><div class="admin-stat-label">Start Date</div><div class="admin-stat-sub">Renewal: ' + (nextRenewal ? nextRenewal.renewal_date.substring(0,10) : '-') + '</div></div>' +
     '</div>' +
 
     // Tabs

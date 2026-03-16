@@ -208,27 +208,27 @@ async def _seed_demo_data(conn: aiosqlite.Connection):
     subs = [
         # Acme — all three
         ("sub-a1", "comp-acme", "interception", "free", "active", "2025-07-01", "2026-07-01", 100, 0.0, "Free tier — unlimited"),
-        ("sub-a2", "comp-acme", "provenance", "enterprise", "active", "2025-07-01", "2026-07-01", 100, 250.0, "$250/seat/yr"),
-        ("sub-a3", "comp-acme", "remediation", "enterprise", "active", "2025-07-01", "2026-07-01", 50, 150.0, "$150/seat/yr"),
+        ("sub-a2", "comp-acme", "provenance", "enterprise", "active", "2025-07-01", "2026-07-01", 100, 180.0, "$180/seat/yr"),
+        ("sub-a3", "comp-acme", "remediation", "enterprise", "active", "2025-07-01", "2026-07-01", 50, 350.0, "$350/seat/yr"),
         # Globex — interception + provenance
         ("sub-g1", "comp-globex", "interception", "free", "active", "2025-10-01", "2026-10-01", 50, 0.0, "Free tier"),
-        ("sub-g2", "comp-globex", "provenance", "business", "active", "2025-10-01", "2026-10-01", 50, 150.0, "$150/seat/yr"),
-        ("sub-g3", "comp-globex", "remediation", "business", "active", "2025-10-01", "2026-10-01", 25, 100.0, "$100/seat/yr"),
+        ("sub-g2", "comp-globex", "provenance", "business", "active", "2025-10-01", "2026-10-01", 50, 120.0, "$120/seat/yr"),
+        ("sub-g3", "comp-globex", "remediation", "business", "active", "2025-10-01", "2026-10-01", 25, 220.0, "$220/seat/yr"),
         # Initech — interception only + provenance
         ("sub-i1", "comp-initech", "interception", "free", "active", "2026-01-15", "2027-01-15", 25, 0.0, "Free tier"),
         ("sub-i2", "comp-initech", "provenance", "starter", "active", "2026-01-15", "2027-01-15", 10, 50.0, "$50/seat/yr"),
         # Umbrella — all three
         ("sub-u1", "comp-umbrella", "interception", "free", "active", "2025-03-01", "2026-03-01", 200, 0.0, "Free tier"),
-        ("sub-u2", "comp-umbrella", "provenance", "enterprise", "active", "2025-03-01", "2026-03-01", 200, 250.0, "$250/seat/yr"),
-        ("sub-u3", "comp-umbrella", "remediation", "enterprise", "active", "2025-03-01", "2026-03-01", 100, 150.0, "$150/seat/yr"),
+        ("sub-u2", "comp-umbrella", "provenance", "enterprise", "active", "2025-03-01", "2026-03-01", 200, 180.0, "$180/seat/yr"),
+        ("sub-u3", "comp-umbrella", "remediation", "enterprise", "active", "2025-03-01", "2026-03-01", 100, 350.0, "$350/seat/yr"),
         # NexGen — all three
         ("sub-n1", "comp-nexgen", "interception", "free", "active", "2025-11-01", "2026-11-01", 40, 0.0, "Free tier"),
-        ("sub-n2", "comp-nexgen", "provenance", "business", "active", "2025-11-01", "2026-11-01", 40, 150.0, "$150/seat/yr"),
-        ("sub-n3", "comp-nexgen", "remediation", "business", "active", "2025-11-01", "2026-11-01", 20, 100.0, "$100/seat/yr"),
+        ("sub-n2", "comp-nexgen", "provenance", "business", "active", "2025-11-01", "2026-11-01", 40, 120.0, "$120/seat/yr"),
+        ("sub-n3", "comp-nexgen", "remediation", "business", "active", "2025-11-01", "2026-11-01", 20, 220.0, "$220/seat/yr"),
         # Pacifica — all three
         ("sub-p1", "comp-pacifica", "interception", "free", "active", "2025-09-01", "2026-09-01", 75, 0.0, "Free tier"),
-        ("sub-p2", "comp-pacifica", "provenance", "enterprise", "active", "2025-09-01", "2026-09-01", 75, 250.0, "$250/seat/yr"),
-        ("sub-p3", "comp-pacifica", "remediation", "enterprise", "active", "2025-09-01", "2026-09-01", 30, 150.0, "$150/seat/yr"),
+        ("sub-p2", "comp-pacifica", "provenance", "enterprise", "active", "2025-09-01", "2026-09-01", 75, 180.0, "$180/seat/yr"),
+        ("sub-p3", "comp-pacifica", "remediation", "enterprise", "active", "2025-09-01", "2026-09-01", 30, 350.0, "$350/seat/yr"),
     ]
     for s in subs:
         await conn.execute(
@@ -239,26 +239,26 @@ async def _seed_demo_data(conn: aiosqlite.Connection):
     # Billing transactions (Q1 2026)
     billing = [
         # Acme
-        ("bill-a1", "comp-acme", q_start, q_end, "provenance", "Provenance — 100 seats Q1", 100, 62.50, 6250.0),
-        ("bill-a2", "comp-acme", q_start, q_end, "remediation", "Remediation — 50 seats Q1", 50, 37.50, 1875.0),
-        ("bill-a3", "comp-acme", q_start, q_end, "remediation", "Remediation exec — 47 actions @ $2.50", 47, 2.50, 117.50),
+        ("bill-a1", "comp-acme", q_start, q_end, "provenance", "Provenance — 100 seats Q1", 100, 45.0, 4500.0),
+        ("bill-a2", "comp-acme", q_start, q_end, "remediation", "Remediation — 50 seats Q1", 50, 87.50, 4375.0),
+        ("bill-a3", "comp-acme", q_start, q_end, "remediation", "Remediation exec — 47 actions @ $5.00", 47, 5.0, 235.0),
         ("bill-a4", "comp-acme", q_start, q_end, "interception", "Interception — free tier", 100, 0.0, 0.0),
         # Globex
-        ("bill-g1", "comp-globex", q_start, q_end, "provenance", "Provenance — 50 seats Q1", 50, 37.50, 1875.0),
-        ("bill-g2", "comp-globex", q_start, q_end, "remediation", "Remediation — 25 seats Q1", 25, 25.0, 625.0),
-        ("bill-g3", "comp-globex", q_start, q_end, "remediation", "Remediation exec — 12 actions @ $2.50", 12, 2.50, 30.0),
+        ("bill-g1", "comp-globex", q_start, q_end, "provenance", "Provenance — 50 seats Q1", 50, 30.0, 1500.0),
+        ("bill-g2", "comp-globex", q_start, q_end, "remediation", "Remediation — 25 seats Q1", 25, 55.0, 1375.0),
+        ("bill-g3", "comp-globex", q_start, q_end, "remediation", "Remediation exec — 12 actions @ $5.00", 12, 5.0, 60.0),
         ("bill-g4", "comp-globex", q_start, q_end, "interception", "Interception — free tier", 50, 0.0, 0.0),
         # Initech
         ("bill-i1", "comp-initech", q_start, q_end, "provenance", "Provenance — 10 seats Q1", 10, 12.50, 125.0),
         ("bill-i2", "comp-initech", q_start, q_end, "interception", "Interception — free tier", 25, 0.0, 0.0),
         # NexGen
-        ("bill-n1", "comp-nexgen", q_start, q_end, "provenance", "Provenance — 40 seats Q1", 40, 37.50, 1500.0),
-        ("bill-n2", "comp-nexgen", q_start, q_end, "remediation", "Remediation — 20 seats Q1", 20, 25.0, 500.0),
-        ("bill-n3", "comp-nexgen", q_start, q_end, "remediation", "Remediation exec — 8 actions @ $2.50", 8, 2.50, 20.0),
+        ("bill-n1", "comp-nexgen", q_start, q_end, "provenance", "Provenance — 40 seats Q1", 40, 30.0, 1200.0),
+        ("bill-n2", "comp-nexgen", q_start, q_end, "remediation", "Remediation — 20 seats Q1", 20, 55.0, 1100.0),
+        ("bill-n3", "comp-nexgen", q_start, q_end, "remediation", "Remediation exec — 8 actions @ $5.00", 8, 5.0, 40.0),
         # Pacifica
-        ("bill-p1", "comp-pacifica", q_start, q_end, "provenance", "Provenance — 75 seats Q1", 75, 62.50, 4687.50),
-        ("bill-p2", "comp-pacifica", q_start, q_end, "remediation", "Remediation — 30 seats Q1", 30, 37.50, 1125.0),
-        ("bill-p3", "comp-pacifica", q_start, q_end, "remediation", "Remediation exec — 22 actions @ $2.50", 22, 2.50, 55.0),
+        ("bill-p1", "comp-pacifica", q_start, q_end, "provenance", "Provenance — 75 seats Q1", 75, 45.0, 3375.0),
+        ("bill-p2", "comp-pacifica", q_start, q_end, "remediation", "Remediation — 30 seats Q1", 30, 87.50, 2625.0),
+        ("bill-p3", "comp-pacifica", q_start, q_end, "remediation", "Remediation exec — 22 actions @ $5.00", 22, 5.0, 110.0),
     ]
     for b in billing:
         await conn.execute(
